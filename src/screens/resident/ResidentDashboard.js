@@ -101,6 +101,46 @@ const ResidentDashboard = ({ navigation }) => {
                         </AnimatedCard3D>
                     </View>
 
+                    {/* New Features Row */}
+                    <Text style={styles.sectionTitle}>Explore Features</Text>
+                    <View style={styles.featuresGrid}>
+                        <AnimatedCard3D
+                            index={3}
+                            style={styles.featureCard}
+                            onPress={() => navigation.navigate('CommunityFeedScreen')}
+                        >
+                            <Ionicons name="people" size={24} color={theme.colors.primary} />
+                            <Text style={styles.featureTitle}>Community</Text>
+                        </AnimatedCard3D>
+
+                        <AnimatedCard3D
+                            index={4}
+                            style={styles.featureCard}
+                            onPress={() => navigation.navigate('FacilityListScreen')}
+                        >
+                            <Ionicons name="calendar" size={24} color="#10b981" />
+                            <Text style={styles.featureTitle}>Facilities</Text>
+                        </AnimatedCard3D>
+
+                        <AnimatedCard3D
+                            index={5}
+                            style={styles.featureCard}
+                            onPress={() => navigation.navigate('VendorListScreen')}
+                        >
+                            <Ionicons name="construct" size={24} color="#f59e0b" />
+                            <Text style={styles.featureTitle}>Services</Text>
+                        </AnimatedCard3D>
+
+                        <AnimatedCard3D
+                            index={6}
+                            style={styles.featureCard}
+                            onPress={() => navigation.navigate('EmergencyScreen')}
+                        >
+                            <Ionicons name="warning" size={24} color="#ef4444" />
+                            <Text style={styles.featureTitle}>Emergency</Text>
+                        </AnimatedCard3D>
+                    </View>
+
                     {/* Pending Approvals Section */}
                     <Text style={styles.sectionTitle}>Pending Approvals</Text>
                     {pendingVisitors.length > 0 ? (
@@ -463,6 +503,26 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 10,
         fontWeight: '700',
+    },
+
+    // Feature Cards
+    featuresGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        marginBottom: 24,
+    },
+    featureCard: {
+        width: '48%',
+        padding: 20,
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    featureTitle: {
+        ...theme.typography.h4,
+        color: theme.colors.text.primary,
+        marginTop: 8,
+        fontSize: 14,
     },
 });
 

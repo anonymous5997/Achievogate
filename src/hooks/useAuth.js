@@ -91,6 +91,47 @@ export const useAuth = () => {
         return result;
     };
 
+    const signInWithPhone = async (phone, password) => {
+        setError(null);
+        setLoading(true);
+        const result = await authService.signInWithPhone(phone, password);
+
+        if (result.success) {
+            setUser(result.user);
+            setUserProfile(result.userProfile);
+        } else {
+            setError(result.error);
+        }
+
+        setLoading(false);
+        return result;
+    };
+
+    const sendOTPViaFirestore = async (identifier) => {
+        setError(null);
+        const result = await authService.sendOTPViaFirestore(identifier);
+        if (!result.success) {
+            setError(result.error);
+        }
+        return result;
+    };
+
+    const verifyOTPFromFirestore = async (identifier, otp) => {
+        setError(null);
+        setLoading(true);
+        const result = await authService.verifyOTPFromFirestore(identifier, otp);
+
+        if (result.success) {
+            setUser(result.user);
+            setUserProfile(result.userProfile);
+        } else {
+            setError(result.error);
+        }
+
+        setLoading(false);
+        return result;
+    };
+
     const signOut = async () => {
         setLoading(true);
         const result = await authService.signOut();
@@ -118,9 +159,12 @@ export const useAuth = () => {
         loading,
         error,
         signInWithEmail,
+        signInWithPhone,
         signUpWithEmail,
         sendOTP,
+        sendOTPViaFirestore,
         verifyOTP,
+        verifyOTPFromFirestore,
         signOut,
         updateProfile,
         isAuthenticated: !!user,

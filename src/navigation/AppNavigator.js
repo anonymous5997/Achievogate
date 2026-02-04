@@ -1,5 +1,20 @@
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useEffect, useState } from 'react';
 import useAuth from '../hooks/useAuth';
+import theme from '../theme/theme';
+
+// Onboarding
+import AddHomeScreen from '../screens/onboarding/AddHomeScreen';
+import BuildingSelectionScreen from '../screens/onboarding/BuildingSelectionScreen';
+import CitySelectionScreen from '../screens/onboarding/CitySelectionScreen';
+import CountrySelectionScreen from '../screens/onboarding/CountrySelectionScreen';
+import GetStartedScreen from '../screens/onboarding/GetStartedScreen';
+import OnboardingCarouselScreen from '../screens/onboarding/OnboardingCarouselScreen';
+import OTPVerificationScreen from '../screens/onboarding/OTPVerificationScreen';
+import UserDetailsScreen from '../screens/onboarding/UserDetailsScreen';
 
 // Auth
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -14,34 +29,128 @@ import ScanQRScreen from '../screens/guard/ScanQRScreen';
 import VisitorList from '../screens/guard/VisitorList';
 
 // Resident
+import BookFacilityScreen from '../screens/resident/BookFacilityScreen';
+import CommunityFeedScreen from '../screens/resident/CommunityFeedScreen';
+import CreatePostScreen from '../screens/resident/CreatePostScreen';
+import FacilityListScreen from '../screens/resident/FacilityListScreen';
 import InviteVisitorScreen from '../screens/resident/InviteVisitorScreen';
+import MyBookingsScreen from '../screens/resident/MyBookingsScreen';
+import MyRequestsScreen from '../screens/resident/MyRequestsScreen';
+import PaymentsScreen from '../screens/resident/PaymentsScreen';
+import PostDetailScreen from '../screens/resident/PostDetailScreen';
+import ProfileScreen from '../screens/resident/ProfileScreen';
 import ResidentComplaintScreen from '../screens/resident/ResidentComplaintScreen';
 import ResidentDashboard from '../screens/resident/ResidentDashboard';
 import ScheduleVisitorScreen from '../screens/resident/ScheduleVisitorScreen';
+import ServiceRequestScreen from '../screens/resident/ServiceRequestScreen';
+import SettingsScreen from '../screens/resident/SettingsScreen';
+import VendorDetailScreen from '../screens/resident/VendorDetailScreen';
+import VendorListScreen from '../screens/resident/VendorListScreen';
 
 // Admin
 import AdminDashboard from '../screens/admin/AdminDashboard';
 import AllVisitors from '../screens/admin/AllVisitors';
+import AnalyticsDashboard from '../screens/admin/AnalyticsDashboard';
 import ComplaintManagement from '../screens/admin/ComplaintManagement';
+import PaymentManagementScreen from '../screens/admin/PaymentManagementScreen';
 import SocietyManagement from '../screens/admin/SocietyManagement';
 import UserManagement from '../screens/admin/UserManagement';
+import VehicleManagementScreen from '../screens/admin/VehicleManagementScreen';
 
 // Shared
+import EmergencyScreen from '../screens/shared/EmergencyScreen';
 import ViewNoticesScreen from '../screens/shared/ViewNoticesScreen';
 import VisitorPassScreen from '../screens/shared/VisitorPassScreen';
 
 const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
+
+// Resident Tab Navigator
+const ResidentTabs = () => {
+    return (
+        <Tab.Navigator
+            screenOptions={({ route }) => ({
+                headerShown: false,
+                tabBarIcon: ({ focused, color, size }) => {
+                    let iconName;
+
+                    if (route.name === 'Home') {
+                        iconName = focused ? 'home' : 'home-outline';
+                    } else if (route.name === 'Visitors') {
+                        iconName = focused ? 'people' : 'people-outline';
+                    } else if (route.name === 'Payments') {
+                        iconName = focused ? 'cash' : 'cash-outline';
+                    } else if (route.name === 'Account') {
+                        iconName = focused ? 'person' : 'person-outline';
+                    }
+
+                    return <Ionicons name={iconName} size={size} color={color} />;
+                },
+                tabBarActiveTintColor: theme.colors.primary,
+                tabBarInactiveTintColor: theme.colors.text.muted,
+                tabBarStyle: {
+                    backgroundColor: theme.colors.surface,
+                    borderTopColor: 'rgba(255,255,255,0.1)',
+                    paddingBottom: 8,
+                    paddingTop: 8,
+                    height: 60,
+                },
+            })}
+        >
+            <Tab.Screen name="Home" component={ResidentDashboard} />
+            <Tab.Screen
+                name="Visitors"
+                component={InviteVisitorScreen}
+                options={{ tabBarBadge: null }} // Can add badge count here
+            />
+            <Tab.Screen name="Payments" component={PaymentsScreen} />
+            <Tab.Screen name="Account" component={ProfileScreen} />
+        </Tab.Navigator>
+    );
+};
 
 const AppNavigator = () => {
     const { user, userProfile, loading } = useAuth();
+    const [onboardingComplete, setOnboardingComplete] = useState(null);
+
+    useEffect(() => {
+        checkOnboarding();
+    }, []);
+
+    const checkOnboarding = async () => {
+        const completed = await AsyncStorage.getItem('onboardingCompleted');
+        setOnboardingComplete(completed === 'true');
+    };
+
+    // Show loading while checking onboarding status
+    if (onboardingComplete === null) {
+        return null; // Or a loading screen
+    }
 
     if (loading) return null;
 
     if (!user || !userProfile) {
         return (
-            <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
-                <Stack.Screen name="Login" component={LoginScreen} />
-                <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
+                {!onboardingComplete ? (
+                    // Onboarding Flow
+                    <>
+                        <Stack.Screen name="OnboardingCarousel" component={OnboardingCarouselScreen} />
+                        <Stack.Screen name="GetStartedScreen" component={GetStartedScreen} />
+                        <Stack.Screen name="UserDetailsScreen" component={UserDetailsScreen} />
+                        <Stack.Screen name="OTPVerificationScreen" component={OTPVerificationScreen} />
+                        <Stack.Screen name="CountrySelectionScreen" component={CountrySelectionScreen} />
+                        <Stack.Screen name="CitySelectionScreen" component={CitySelectionScreen} />
+                        <Stack.Screen name="AddHomeScreen" component={AddHomeScreen} />
+                        <Stack.Screen name="BuildingSelectionScreen" component={BuildingSelectionScreen} />
+                    </>
+                ) : (
+                    // Auth Flow
+                    <>
+                        <Stack.Screen name="Login" component={LoginScreen} />
+                        <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
+                    </>
+                )}
             </Stack.Navigator>
         );
     }
@@ -59,18 +168,30 @@ const AppNavigator = () => {
                         <Stack.Screen name="ScanQRScreen" component={ScanQRScreen} />
                         <Stack.Screen name="ViewNoticesScreen" component={ViewNoticesScreen} />
                         <Stack.Screen name="VisitorPassScreen" component={VisitorPassScreen} />
+                        <Stack.Screen name="EmergencyScreen" component={EmergencyScreen} />
                     </>
                 );
 
             case 'resident':
                 return (
                     <>
-                        <Stack.Screen name="ResidentDashboard" component={ResidentDashboard} />
-                        <Stack.Screen name="InviteVisitor" component={InviteVisitorScreen} />
+                        <Stack.Screen name="ResidentTabs" component={ResidentTabs} />
                         <Stack.Screen name="ScheduleVisitor" component={ScheduleVisitorScreen} />
                         <Stack.Screen name="VisitorPassScreen" component={VisitorPassScreen} />
                         <Stack.Screen name="ResidentComplaint" component={ResidentComplaintScreen} />
                         <Stack.Screen name="ViewNoticesScreen" component={ViewNoticesScreen} />
+                        <Stack.Screen name="SettingsScreen" component={SettingsScreen} />
+                        <Stack.Screen name="EmergencyScreen" component={EmergencyScreen} />
+                        <Stack.Screen name="CommunityFeedScreen" component={CommunityFeedScreen} />
+                        <Stack.Screen name="PostDetailScreen" component={PostDetailScreen} />
+                        <Stack.Screen name="CreatePostScreen" component={CreatePostScreen} />
+                        <Stack.Screen name="FacilityListScreen" component={FacilityListScreen} />
+                        <Stack.Screen name="BookFacilityScreen" component={BookFacilityScreen} />
+                        <Stack.Screen name="MyBookingsScreen" component={MyBookingsScreen} />
+                        <Stack.Screen name="VendorListScreen" component={VendorListScreen} />
+                        <Stack.Screen name="VendorDetailScreen" component={VendorDetailScreen} />
+                        <Stack.Screen name="ServiceRequestScreen" component={ServiceRequestScreen} />
+                        <Stack.Screen name="MyRequestsScreen" component={MyRequestsScreen} />
                     </>
                 );
 
@@ -84,15 +205,16 @@ const AppNavigator = () => {
                         <Stack.Screen name="ComplaintManagement" component={ComplaintManagement} />
                         <Stack.Screen name="AnalyticsDashboard" component={AnalyticsDashboard} />
                         <Stack.Screen name="VehicleManagementScreen" component={VehicleManagementScreen} />
+                        <Stack.Screen name="PaymentManagementScreen" component={PaymentManagementScreen} />
                         <Stack.Screen name="ViewNoticesScreen" component={ViewNoticesScreen} />
+                        <Stack.Screen name="EmergencyScreen" component={EmergencyScreen} />
                     </>
                 );
 
             default:
                 return (
                     <>
-                        <Stack.Screen name="ResidentDashboard" component={ResidentDashboard} />
-                        <Stack.Screen name="InviteVisitor" component={InviteVisitorScreen} />
+                        <Stack.Screen name="ResidentTabs" component={ResidentTabs} />
                     </>
                 );
         }
