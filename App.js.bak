@@ -1,0 +1,38 @@
+import { StatusBar } from 'expo-status-bar';
+import { useEffect, useState } from 'react';
+import { LogBox } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import 'react-native-reanimated';
+import AppNavigator from './src/navigation/AppNavigator';
+import SplashScreen from './src/screens/status/SplashScreen';
+
+LogBox.ignoreLogs([
+    'SafeAreaView has been deprecated',
+]);
+
+export default function App() {
+    const [appReady, setAppReady] = useState(false);
+
+    useEffect(() => {
+        // Simulate app loading (assets, fonts, initial logic)
+        // In a real app, you'd load fonts here via expo-font
+        const prepare = async () => {
+            // Artificial delay to show off the cinematic splash
+            setTimeout(() => {
+                setAppReady(true);
+            }, 3000);
+        };
+        prepare();
+    }, []);
+
+    if (!appReady) {
+        return <SplashScreen />;
+    }
+
+    return (
+        <GestureHandlerRootView style={{ flex: 1 }}>
+            <StatusBar style="light" />
+            <AppNavigator />
+        </GestureHandlerRootView>
+    );
+}

@@ -1,0 +1,33 @@
+{
+    "indexes": [
+        {
+            "collectionGroup": "visitors",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "flatNumber",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "entryTime",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "visitors",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "entryTime",
+                    "order": "DESCENDING"
+                }
+            ]
+        }
+    ],
+    "fieldOverrides": []
+}

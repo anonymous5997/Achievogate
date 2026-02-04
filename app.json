@@ -1,39 +1,66 @@
 {
   "expo": {
-    "name": "achievogate-app",
+    "name": "AchievoGate",
     "slug": "achievogate-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "achievogateapp",
-    "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "userInterfaceStyle": "dark",
+    "scheme": "achievogate",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F0F1A"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.achievogate.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "AchievoGate needs camera access to take visitor photos",
+        "NSPhotoLibraryUsageDescription": "AchievoGate needs photo library access to select visitor photos"
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundColor": "#0F0F1A",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "package": "com.achievogate.app",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
+      "edgeToEdgeEnabled": true
     },
     "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "output": "single",
+      "config": {
+        "firebase": {
+          "apiKey": "AIzaSyD_WvzbVJkMeqKxQSuK9fpcBzLLrTws5Io",
+          "authDomain": "achievogate-ed022.firebaseapp.com",
+          "projectId": "achievogate-ed022",
+          "storageBucket": "achievogate-ed022.firebasestorage.app",
+          "messagingSenderId": "156056821519",
+          "appId": "1:156056821519:web:955aaf11e253619aff687a",
+          "measurementId": "G-EV1WKLPTXX"
+        }
+      }
     },
     "plugins": [
-      "expo-router",
       [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#0F0F1A",
           "dark": {
             "backgroundColor": "#000000"
           }
@@ -41,8 +68,8 @@
       ]
     ],
     "experiments": {
-      "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "newArchEnabled": true
   }
 }
