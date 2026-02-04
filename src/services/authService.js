@@ -1,7 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import {
+    createUserWithEmailAndPassword,
     signOut as firebaseSignOut,
     onAuthStateChanged,
+    signInWithEmailAndPassword,
     signInWithPhoneNumber
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
@@ -12,17 +15,63 @@ class AuthService {
         this.confirmationResult = null;
     }
 
-    // Send OTP to phone number
+    // Check if running in Expo Go
+    isExpoGo() {
+        return Constants.appOwnership === 'expo';
+    }
+
+    // Email/Password Sign In (for Expo Go development)
+    async signInWithEmail(email, password) {
+        try {
+            const credential = await signInWithEmailAndPassword(auth, email, password);
+            const user = credential.user;
+
+            // Store user session
+            await AsyncStorage.setItem('userToken', await user.getIdToken());
+            await AsyncStorage.setItem('userId', user.uid);
+
+            // Fetch or create user profile
+            const userProfile = await this.getUserProfile(user.uid);
+
+            return { success: true, user, userProfile };
+        } catch (error) {
+            console.error('Error signing in with email:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    // Email/Password Sign Up (for Expo Go development)
+    async signUpWithEmail(email, password, phoneNumber) {
+        try {
+            const credential = await createUserWithEmailAndPassword(auth, email, password);
+            const user = credential.user;
+
+            // Store user session
+            await AsyncStorage.setItem('userToken', await user.getIdToken());
+            await AsyncStorage.setItem('userId', user.uid);
+
+            // Create user profile with phone number
+            const userProfile = await this.getUserProfile(user.uid);
+            if (phoneNumber) {
+                await this.updateUserProfile(user.uid, { phone: phoneNumber });
+            }
+
+            return { success: true, user, userProfile };
+        } catch (error) {
+            console.error('Error signing up with email:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    // Send OTP to phone number (for production builds)
     async sendOTP(phoneNumber, recaptchaRef) {
         try {
             // In Expo Go, recaptcha is not available
-            // For testing, we'll return a mock success
-            // In production with Development Build, use real recaptcha
-            if (!recaptchaRef) {
-                console.warn('Recaptcha not available - OTP disabled in Expo Go');
+            if (this.isExpoGo() || !recaptchaRef) {
+                console.warn('Running in Expo Go - Phone auth not supported');
                 return {
                     success: false,
-                    error: 'Phone authentication requires a Development Build. Recaptcha is not supported in Expo Go.'
+                    error: 'Phone authentication requires a Development Build. Please use email/password for testing.'
                 };
             }
 
@@ -39,7 +88,7 @@ class AuthService {
         }
     }
 
-    // Verify OTP code
+    // Verify OTP code (for production builds)
     async verifyOTP(code) {
         try {
             if (!this.confirmationResult) {
@@ -75,6 +124,7 @@ class AuthService {
                 // Create default user profile if doesn't exist
                 const defaultProfile = {
                     id: userId,
+                    email: auth.currentUser?.email || '',
                     phone: auth.currentUser?.phoneNumber || '',
                     name: '',
                     role: 'resident', // Default role

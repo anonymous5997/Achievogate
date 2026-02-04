@@ -34,6 +34,38 @@ export const useAuth = () => {
         }
     };
 
+    const signInWithEmail = async (email, password) => {
+        setError(null);
+        setLoading(true);
+        const result = await authService.signInWithEmail(email, password);
+
+        if (result.success) {
+            setUser(result.user);
+            setUserProfile(result.userProfile);
+        } else {
+            setError(result.error);
+        }
+
+        setLoading(false);
+        return result;
+    };
+
+    const signUpWithEmail = async (email, password, phoneNumber) => {
+        setError(null);
+        setLoading(true);
+        const result = await authService.signUpWithEmail(email, password, phoneNumber);
+
+        if (result.success) {
+            setUser(result.user);
+            setUserProfile(result.userProfile);
+        } else {
+            setError(result.error);
+        }
+
+        setLoading(false);
+        return result;
+    };
+
     const sendOTP = async (phoneNumber, recaptchaRef) => {
         setError(null);
         const result = await authService.sendOTP(phoneNumber, recaptchaRef);
@@ -85,6 +117,8 @@ export const useAuth = () => {
         userProfile,
         loading,
         error,
+        signInWithEmail,
+        signUpWithEmail,
         sendOTP,
         verifyOTP,
         signOut,
