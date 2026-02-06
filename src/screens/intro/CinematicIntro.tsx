@@ -1,27 +1,35 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useRef } from 'react';
-import {
-    Dimensions,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-} from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Dimensions, StyleSheet, Text } from 'react-native';
 import Animated, {
     Easing,
     runOnJS,
+    useAnimatedStyle,
     useSharedValue,
     withDelay,
     withSequence,
     withSpring,
-    withTiming
+    withTiming,
 } from 'react-native-reanimated';
 
 const { width, height } = Dimensions.get('window');
 
-const SplashIntroScreen = ({ onComplete }) => {
-    // Animation values (Reanimated)
+interface CinematicIntroProps {
+    onComplete?: () => void;
+}
+
+/**
+ * CinematicIntro Component
+ * Netflix-style intro animation with multi-phase sequence
+ * - Logo scale + glow ring expansion
+ * - Light sweep effect
+ * - Title letter spacing reveal
+ * Target: 60fps with Reanimated worklets
+ */
+
+const CinematicIntro: React.FC<CinematicIntroProps> = ({ onComplete }) => {
+    // Animation values
     const logoScale = useSharedValue(0.7);
     const logoOpacity = useSharedValue(0);
     const glowScale = useSharedValue(0);
@@ -31,35 +39,9 @@ const SplashIntroScreen = ({ onComplete }) => {
     const titleScale = useSharedValue(1.1);
     const screenOpacity = useSharedValue(1);
 
-    const skippable = useRef(false);
     const hasCompleted = useRef(false);
 
-    const completeIntro = () => {
-        if (hasCompleted.current) return;
-        hasCompleted.current = true;
-
-        // Fade out entire screen
-        screenOpacity.value = withTiming(
-            0,
-            {
-                duration: 400,
-                easing: Easing.in(Easing.ease),
-            },
-            (finished) => {
-                if (finished && onComplete) {
-                    runOnJS(onComplete)();
-                }
-            }
-        );
-    };
-
     useEffect(() => {
-        // Mark as skippable after 1.5 seconds
-        setTimeout(() => {
-            skippable.current = true;
-        }, 1500);
-
-        // Start the cinematic sequence with Reanimated
         // Phase 1: Logo reveal (0-800ms)
         logoScale.value = withSpring(1, {
             damping: 20,
@@ -119,19 +101,25 @@ const SplashIntroScreen = ({ onComplete }) => {
             })
         );
 
-        // Auto-complete after 3 seconds
-        setTimeout(() => {
-            completeIntro();
-        }, 3000);
+        // Phase 5: Fade out (3000ms)
+        screenOpacity.value = withDelay(
+            3000,
+            withTiming(
+                0,
+                {
+                    duration: 400,
+                    easing: Easing.in(Easing.ease),
+                },
+                (finished) => {
+                    if (finished && onComplete && !hasCompleted.current) {
+                        hasCompleted.current = true;
+                        runOnJS(onComplete)();
+                    }
+                }
+            )
+        );
     }, []);
 
-    const handleSkip = () => {
-        if (skippable.current && !hasCompleted.current) {
-            completeIntro();
-        }
-    };
-
-    // Animated styles
     const screenAnimatedStyle = useAnimatedStyle(() => ({
         opacity: screenOpacity.value,
     }));
@@ -157,7 +145,7 @@ const SplashIntroScreen = ({ onComplete }) => {
 
     return (
         <Animated.View style={[styles.container, screenAnimatedStyle]}>
-            {/* Cinematic Background Gradient */}
+            {/* Background Gradient */}
             <LinearGradient
                 colors={['#0F0F1E', '#1A1A2E', '#0F0F1E']}
                 start={{ x: 0, y: 0 }}
@@ -165,7 +153,7 @@ const SplashIntroScreen = ({ onComplete }) => {
                 style={StyleSheet.absoluteFill}
             />
 
-            {/* Glow Ring Behind Logo */}
+            {/* Glow Ring */}
             <Animated.View style={[styles.glowRing, glowAnimatedStyle]}>
                 <LinearGradient
                     colors={['rgba(91, 108, 255, 0.4)', 'rgba(124, 140, 255, 0.2)', 'transparent']}
@@ -177,33 +165,17 @@ const SplashIntroScreen = ({ onComplete }) => {
 
             {/* Logo Container */}
             <Animated.View style={[styles.logoContainer, logoAnimatedStyle]}>
-                {/* 3D Shield Icon */}
-                <View style={styles.shieldContainer}>
-                    {/* Back layer (shadow) */}
-                    <View style={[styles.shieldShadow, { top: 8, left: 8 }]}>
-                        <Ionicons name="shield-checkmark" size={120} color="rgba(0, 0, 0, 0.3)" />
-                    </View>
-
-                    {/* Middle layer (glow) */}
-                    <View style={styles.shieldGlow}>
-                        <Ionicons name="shield-checkmark" size={120} color="rgba(91, 108, 255, 0.5)" />
-                    </View>
-
-                    {/* Front layer (main) */}
-                    <View style={styles.shieldMain}>
-                        <LinearGradient
-                            colors={['#5B6CFF', '#7C8CFF']}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={styles.shieldGradient}
-                        >
-                            <Ionicons name="shield-checkmark" size={120} color="#FFFFFF" />
-                        </LinearGradient>
-                    </View>
-                </View>
+                <LinearGradient
+                    colors={['#5B6CFF', '#7C8CFF']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.logoGradient}
+                >
+                    <Ionicons name="shield-checkmark" size={120} color="#FFFFFF" />
+                </LinearGradient>
             </Animated.View>
 
-            {/* Light Sweep Effect */}
+            {/* Light Sweep */}
             <Animated.View style={[styles.lightSweep, sweepAnimatedStyle]}>
                 <LinearGradient
                     colors={['transparent', 'rgba(255, 255, 255, 0.15)', 'transparent']}
@@ -213,21 +185,12 @@ const SplashIntroScreen = ({ onComplete }) => {
                 />
             </Animated.View>
 
-            {/* Title Text */}
+            {/* Title */}
             <Animated.View style={[styles.titleContainer, titleAnimatedStyle]}>
                 <Text style={styles.title}>ACHIEVOGATE</Text>
-                <View style={styles.titleUnderline} />
+                <Animated.View style={styles.titleUnderline} />
                 <Text style={styles.subtitle}>Smart Society Management</Text>
             </Animated.View>
-
-            {/* Skip Button (appears after 1.5s) */}
-            <TouchableOpacity
-                style={styles.skipButton}
-                onPress={handleSkip}
-                activeOpacity={0.7}
-            >
-                <Text style={styles.skipText}>Skip</Text>
-            </TouchableOpacity>
         </Animated.View>
     );
 };
@@ -239,53 +202,26 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: '#0F0F1E',
     },
-
-    // Glow Ring
     glowRing: {
         position: 'absolute',
         width: 200,
         height: 200,
         borderRadius: 100,
-        justifyContent: 'center',
-        alignItems: 'center',
     },
     glowGradient: {
         width: '100%',
         height: '100%',
         borderRadius: 100,
     },
-
-    // Logo
     logoContainer: {
         justifyContent: 'center',
         alignItems: 'center',
         zIndex: 10,
     },
-    shieldContainer: {
+    logoGradient: {
         width: 140,
         height: 140,
-        justifyContent: 'center',
-        alignItems: 'center',
-        position: 'relative',
-    },
-    shieldShadow: {
-        position: 'absolute',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    shieldGlow: {
-        position: 'absolute',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    shieldMain: {
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    shieldGradient: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
+        borderRadius: 70,
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: '#5B6CFF',
@@ -294,8 +230,6 @@ const styles = StyleSheet.create({
         shadowRadius: 20,
         elevation: 10,
     },
-
-    // Light Sweep
     lightSweep: {
         position: 'absolute',
         top: 0,
@@ -306,8 +240,6 @@ const styles = StyleSheet.create({
     sweepGradient: {
         flex: 1,
     },
-
-    // Title
     titleContainer: {
         position: 'absolute',
         bottom: height * 0.25,
@@ -334,24 +266,6 @@ const styles = StyleSheet.create({
         letterSpacing: 2,
         textTransform: 'uppercase',
     },
-
-    // Skip Button
-    skipButton: {
-        position: 'absolute',
-        top: 60,
-        right: 24,
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.2)',
-    },
-    skipText: {
-        color: 'rgba(255, 255, 255, 0.8)',
-        fontSize: 14,
-        fontWeight: '600',
-    },
 });
 
-export default SplashIntroScreen;
+export default CinematicIntro;

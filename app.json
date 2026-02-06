@@ -66,12 +66,11 @@
           }
         }
       ],
-      "@react-native-community/datetimepicker",
-      "expo-barcode-scanner"
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "reactCompiler": true
     },
-    "newArchEnabled": true
+    "newArchEnabled": false
   }
 }

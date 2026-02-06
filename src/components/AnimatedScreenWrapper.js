@@ -1,11 +1,45 @@
-import { StyleSheet, View } from 'react-native';
+import { useEffect } from 'react';
+import { StyleSheet } from 'react-native';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 
-// Simple Screen Wrapper (Reanimated removed for Expo Go compatibility)
+/**
+ * AnimatedScreenWrapper
+ * Screen wrapper with cinematic entrance animation
+ */
+
 const AnimatedScreenWrapper = ({ children, style, noPadding = false }) => {
+    const opacity = useSharedValue(0);
+    const scale = useSharedValue(0.94);
+    const translateY = useSharedValue(30);
+
+    useEffect(() => {
+        // Cinematic entrance
+        opacity.value = withTiming(1, {
+            duration: 500,
+            easing: Easing.bezier(0.16, 1, 0.3, 1),
+        });
+        scale.value = withSpring(1, {
+            damping: 20,
+            stiffness: 90,
+        });
+        translateY.value = withSpring(0, {
+            damping: 20,
+            stiffness: 90,
+        });
+    }, []);
+
+    const animatedStyle = useAnimatedStyle(() => ({
+        opacity: opacity.value,
+        transform: [
+            { scale: scale.value },
+            { translateY: translateY.value },
+        ],
+    }));
+
     return (
-        <View style={[styles.container, noPadding && styles.noPadding, style]}>
+        <Animated.View style={[styles.container, noPadding && styles.noPadding, style, animatedStyle]}>
             {children}
-        </View>
+        </Animated.View>
     );
 };
 
