@@ -51,16 +51,19 @@ const ProfileScreen = ({ navigation }) => {
                 subtitle={userProfile?.role?.toUpperCase()}
                 leftIcon="arrow-back"
                 onLeftPress={() => navigation.goBack()}
-                rightIcon={editing ? 'close' : 'create'}
-                onRightPress={() => {
-                    if (editing) {
-                        setEditing(false);
-                        setName(userProfile?.name || '');
-                        setPhone(userProfile?.phone || '');
-                    } else {
-                        setEditing(true);
-                    }
-                }}
+                rightAction={
+                    <TouchableOpacity onPress={() => {
+                        if (editing) {
+                            setEditing(false);
+                            setName(userProfile?.name || '');
+                            setPhone(userProfile?.phone || '');
+                        } else {
+                            setEditing(true);
+                        }
+                    }}>
+                        <Ionicons name={editing ? 'close' : 'create'} size={24} color={theme.colors.primary} />
+                    </TouchableOpacity>
+                }
             />
 
             <ScrollView style={styles.content}>

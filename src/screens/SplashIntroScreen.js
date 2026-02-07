@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useRef } from 'react';
 import {
     Dimensions,
@@ -11,6 +12,7 @@ import {
 import Animated, {
     Easing,
     runOnJS,
+    useAnimatedStyle,
     useSharedValue,
     withDelay,
     withSequence,
@@ -34,7 +36,13 @@ const SplashIntroScreen = ({ onComplete }) => {
     const skippable = useRef(false);
     const hasCompleted = useRef(false);
 
+    useEffect(() => {
+        console.log('SplashIntroScreen: Mounted');
+        SplashScreen.hideAsync().catch(console.warn);
+    }, []);
+
     const completeIntro = () => {
+        console.log('SplashIntroScreen: Completing...');
         if (hasCompleted.current) return;
         hasCompleted.current = true;
 
@@ -126,10 +134,21 @@ const SplashIntroScreen = ({ onComplete }) => {
     }, []);
 
     const handleSkip = () => {
-        if (skippable.current && !hasCompleted.current) {
+        if (!hasCompleted.current) {
             completeIntro();
         }
     };
+
+    // Safety fallback: Force completion after 5 seconds if animations stall
+    useEffect(() => {
+        const safetyTimeout = setTimeout(() => {
+            if (!hasCompleted.current) {
+                console.log('SplashIntroScreen: Safety timeout triggered');
+                completeIntro();
+            }
+        }, 5000);
+        return () => clearTimeout(safetyTimeout);
+    }, []);
 
     // Animated styles
     const screenAnimatedStyle = useAnimatedStyle(() => ({

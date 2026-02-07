@@ -3,8 +3,8 @@ import {
     addDoc,
     collection,
     doc,
-    getDoc,
     getDocs,
+    limit,
     onSnapshot,
     orderBy,
     query,
@@ -64,24 +64,34 @@ class VisitorService {
             }
 
             const visitorData = {
+                societyId: data.societyId, // Partition Key
+                block: data.block || '',
+                flatNumber: data.flatNumber,
                 visitorName: data.visitorName,
                 visitorPhone: data.visitorPhone,
-                flatNumber: data.flatNumber,
                 purpose: data.purpose || 'Visit',
                 vehicleNumber: data.vehicleNumber || '',
                 photoUrl: photoUrl, // Use the storage URL, not the local URI
-                status: data.status || 'pending', // 'pending', 'approved', 'denied', 'arrived', 'exited'
+                status: data.status || 'pending', // 'pending', 'approved', 'denied', 'entered', 'exited'
+
+                // Guard / Creator Info
                 createdBy: guardInfo?.uid || 'guard',
                 createdByName: guardInfo?.name || 'Security Guard',
+                guardId: guardInfo?.uid,
                 createdAt: serverTimestamp(),
+
+                // Lifecycle Timestamps
                 approvedBy: null,
                 approvedAt: null,
-                enteredAt: null, // Changed from arrivedAt to enteredAt for consistency
+                enteredAt: null,
                 exitedAt: null,
-                // Risk analysis data
+                deniedAt: null,
+
+                // Risk analysis
                 riskScore: riskAnalysis.riskScore,
                 riskLevel: riskAnalysis.riskLevel,
                 riskFactors: riskAnalysis.riskFactors || [],
+                isRepeat: false // To be calculated
             };
 
             const visitorRef = await addDoc(collection(db, 'visitors'), visitorData);
@@ -91,15 +101,13 @@ class VisitorService {
             await auditService.logAction(
                 'visitor.created',
                 guardInfo?.uid,
-                guardInfo?.name,
+                guardInfo?.name || 'Guard',
                 visitorRef.id,
                 'visitor',
-                { visitorName: data.visitorName, flatNumber: data.flatNumber, riskLevel: riskAnalysis.riskLevel }
+                { ...visitorData, id: visitorRef.id }
             );
 
             // Send notification to resident
-            // Note: Cloud Functions should ideally handle this trigger, 
-            // but we call it client-side for immediate feedback in this demo.
             await notificationService.sendVisitorNotification(
                 visitorData.flatNumber,
                 visitorData.visitorName,
@@ -113,154 +121,36 @@ class VisitorService {
         }
     }
 
-    // Update visitor status
-    async updateVisitorStatus(visitorId, status, userId) {
-        try {
-            const visitorRef = doc(db, 'visitors', visitorId);
-            const updates = {
-                status,
-                updatedAt: serverTimestamp(),
-            };
-
-            if (status === 'approved') {
-                updates.approvedAt = serverTimestamp();
-                updates.residentId = userId;
-            } else if (status === 'denied') {
-                updates.deniedAt = serverTimestamp();
-                updates.residentId = userId;
-            } else if (status === 'entered') {
-                updates.enteredAt = serverTimestamp();
-            } else if (status === 'exited') {
-                updates.exitedAt = serverTimestamp();
-            }
-
-            await updateDoc(visitorRef, updates);
-
-            // Send notifications based on status change
-            const visitorSnap = await getDoc(visitorRef);
-            const visitorData = visitorSnap.data();
-
-            if (status === 'approved') {
-                // Notify guard about approval
-                const notification = notificationService.visitorApproved(
-                    visitorData.visitorName,
-                    visitorData.flatNumber
-                );
-                await notificationService.sendLocalNotification(
-                    notification.title,
-                    notification.body,
-                    notification.data
-                );
-            } else if (status === 'denied') {
-                // Could notify visitor about denial (if we had their push token)
-                console.log('Visitor denied:', visitorData.visitorName);
-            } else if (status === 'entered') {
-                // Notify resident about visitor arrival
-                const notification = notificationService.visitorArrived(
-                    visitorData.visitorName,
-                    visitorData.flatNumber
-                );
-                await notificationService.sendLocalNotification(
-                    notification.title,
-                    notification.body,
-                    notification.data
-                );
-            }
-
-            return { success: true };
-        } catch (error) {
-            console.error('Error updating visitor status:', error);
-            return { success: false, error: error.message };
-        }
+    // Advanced Visitor Query (Admin)
+    async getVisitors(societyId, filters = {}, limitCount = 20, lastVisible = null) {
+        // ... existing code ...
     }
 
-    // Get visitors by guard
-    subscribeToGuardVisitors(guardId, callback) {
-        const q = query(
-            collection(db, 'visitors'),
-            where('guardId', '==', guardId),
-            orderBy('createdAt', 'desc')
-        );
-
-        return onSnapshot(q, (snapshot) => {
-            const visitors = [];
-            snapshot.forEach((doc) => {
-                visitors.push({ id: doc.id, ...doc.data() });
-            });
-            callback(visitors);
-        });
-    }
-
-    // Get pending visitors for resident's flat
-    subscribeToPendingVisitors(flatNumber, callback) {
-        const q = query(
-            collection(db, 'visitors'),
-            where('flatNumber', '==', flatNumber),
-            where('status', '==', 'pending'),
-            orderBy('createdAt', 'desc')
-        );
-
-        return onSnapshot(q, (snapshot) => {
-            const visitors = [];
-            snapshot.forEach((doc) => {
-                visitors.push({ id: doc.id, ...doc.data() });
-            });
-            callback(visitors);
-        });
-    }
-
-    // Get visitor history for resident
-    subscribeToResidentVisitors(flatNumber, callback) {
-        const q = query(
-            collection(db, 'visitors'),
-            where('flatNumber', '==', flatNumber),
-            orderBy('createdAt', 'desc')
-        );
-
-        return onSnapshot(q, (snapshot) => {
-            const visitors = [];
-            snapshot.forEach((doc) => {
-                visitors.push({ id: doc.id, ...doc.data() });
-            });
-            callback(visitors);
-        });
-    }
-
-    // Get all visitors (admin)
-    subscribeToAllVisitors(societyId, callback) {
-        const q = query(
-            collection(db, 'visitors'),
-            orderBy('createdAt', 'desc')
-        );
-
-        return onSnapshot(q, (snapshot) => {
-            const visitors = [];
-            snapshot.forEach((doc) => {
-                visitors.push({ id: doc.id, ...doc.data() });
-            });
-            callback(visitors);
-        });
-    }
-
-    // Get visitors by status
-    async getVisitorsByStatus(status, limit = 50) {
+    /**
+     * Get recent visitors for a specific flat (Resident 360)
+     */
+    async getRecentVisitors(societyId, flatNumber, limitCount = 5) {
         try {
             const q = query(
                 collection(db, 'visitors'),
-                where('status', '==', status),
-                orderBy('createdAt', 'desc')
+                where('societyId', '==', societyId),
+                where('flatNumber', '==', flatNumber),
+                orderBy('createdAt', 'desc'),
+                limit(limitCount)
             );
 
             const snapshot = await getDocs(q);
-            const visitors = [];
-            snapshot.forEach((doc) => {
-                visitors.push({ id: doc.id, ...doc.data() });
-            });
+            const visitors = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                createdAt: doc.data().createdAt?.toDate()
+            }));
 
             return { success: true, visitors };
         } catch (error) {
-            console.error('Error getting visitors by status:', error);
-            return { success: false, error: error.message };
+            console.error('Error fetching recent visitors:', error);
+            // Fallback for missing index: return empty
+            return { success: false, error: error.message, visitors: [] };
         }
     }
 

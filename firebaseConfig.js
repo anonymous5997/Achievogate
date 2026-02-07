@@ -5,7 +5,7 @@ import {
   getReactNativePersistence,
   initializeAuth
 } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { Platform } from 'react-native';
 
@@ -38,8 +38,17 @@ if (Platform.OS === 'web') {
 
 export { auth };
 
-// Initialize Firestore
-export const db = getFirestore(app);
+
+
+// ...
+
+// Initialize Firestore with settings
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true, // often helps with Expo connections
+});
+// Note: Persistence is enabled by default in recent SDKs for Native, 
+// but for Web JS SDK on Native, it heavily relies on Async Storage.
+// We will rely on the SDK's internal queuing for the session.
 
 // Initialize Firebase Storage
 export const storage = getStorage(app);

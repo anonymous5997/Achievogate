@@ -1,121 +1,123 @@
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { ActivityIndicator, StyleSheet, Text } from 'react-native';
+import { GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
     useAnimatedStyle,
-    useSharedValue,
-    withSpring
+    withTiming
 } from 'react-native-reanimated';
+import { usePhysicsGesture } from '../hooks/usePhysicsGesture';
+import { MotionTokens } from '../motion/MotionTokens';
 import theme from '../theme/theme';
 
-const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+const AnimatedGradient = Animated.createAnimatedComponent(LinearGradient);
 
-const PrimaryButton = ({
-    title,
-    onPress,
-    variant = 'primary', // 'primary' | 'secondary' | 'outline' | 'danger'
-    loading = false,
-    disabled = false,
-    icon,
-    style,
-    textStyle
-}) => {
-    const scale = useSharedValue(1);
+const NeonButton = ({ onPress, title, variant = 'primary', loading = false, style, icon }) => {
+    // Physics Hook
+    const { tapGesture, animatedStyle, values } = usePhysicsGesture({
+        onPress: !loading ? onPress : undefined,
+        scaleOnPress: true,
+    });
 
-    const animatedStyle = useAnimatedStyle(() => {
+    const { isPressed } = values;
+
+    const getColors = () => {
+        switch (variant) {
+            case 'secondary': return theme.colors.gradients.secondary;
+            case 'danger': return theme.colors.gradients.danger;
+            case 'outline': return ['transparent', 'transparent'];
+            default: return theme.colors.gradients.primary;
+        }
+    };
+
+    const isOutline = variant === 'outline';
+    const colors = getColors();
+
+    // Derived Animations
+    const glowStyle = useAnimatedStyle(() => {
+        const opacity = isPressed.value
+            ? withTiming(MotionTokens.light.glow.press, { duration: 100 })
+            : withTiming(MotionTokens.light.glow.idle, { duration: 300 });
+
+        const scaleGlow = isPressed.value
+            ? withTiming(1.1, { duration: 100 })
+            : withTiming(1.0, { duration: 300 });
+
         return {
-            transform: [{ scale: scale.value }],
+            opacity,
+            transform: [{ scale: scaleGlow }]
         };
     });
 
-    const handlePressIn = () => {
-        if (disabled || loading) return;
-        scale.value = withSpring(0.96, { damping: 10, stiffness: 150 });
-    };
-
-    const handlePressOut = () => {
-        if (disabled || loading) return;
-        scale.value = withSpring(1, { damping: 10, stiffness: 150 });
-    };
-
-    const getBackgroundColor = () => {
-        if (disabled) return theme.colors.interactive.disabled;
-        if (variant === 'primary') return theme.colors.interactive.buttonPrimary;
-        if (variant === 'danger') return theme.colors.status.denied;
-        if (variant === 'secondary' || variant === 'outline') return 'transparent';
-        return theme.colors.interactive.buttonPrimary;
-    };
-
-    const getTextColor = () => {
-        if (disabled) return '#888';
-        if (variant === 'secondary' || variant === 'outline') return theme.colors.primary;
-        return theme.colors.interactive.buttonSecondary; // White usually
-    };
-
-    const getBorder = () => {
-        if (variant === 'outline') return { borderWidth: 1, borderColor: theme.colors.primary };
-        return {};
-    };
-
     return (
-        <AnimatedTouchable
-            onPress={onPress}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            activeOpacity={0.9}
-            disabled={disabled || loading}
-            style={[
-                styles.container,
-                { backgroundColor: getBackgroundColor() },
-                getBorder(),
-                animatedStyle,
-                style
-            ]}
-        >
-            {loading ? (
-                <ActivityIndicator color={getTextColor()} />
-            ) : (
-                <View style={styles.content}>
-                    {icon && <View style={styles.iconContainer}>{icon}</View>}
-                    <Text style={[styles.text, { color: getTextColor() }, textStyle]}>
-                        {title}
-                    </Text>
-                </View>
-            )}
-        </AnimatedTouchable>
+        <GestureDetector gesture={tapGesture}>
+            <Animated.View style={[styles.container, style, animatedStyle]}>
+                <AnimatedGradient
+                    colors={colors}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={[
+                        styles.gradient,
+                        isOutline && { borderWidth: 1, borderColor: theme.colors.primary }
+                    ]}
+                >
+                    {loading ? (
+                        <ActivityIndicator color="#fff" />
+                    ) : (
+                        <>
+                            {icon && icon}
+                            <Text style={[styles.text, isOutline && { color: theme.colors.primary }]}>
+                                {title}
+                            </Text>
+                        </>
+                    )}
+                </AnimatedGradient>
+
+                {/* Active Glow (Only for Filled Buttons) */}
+                {!isOutline && !loading && (
+                    <AnimatedGradient
+                        colors={colors}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={[styles.glow, glowStyle]}
+                    />
+                )}
+            </Animated.View>
+        </GestureDetector>
     );
 };
-
-// Alias to maintain compatibility if "NeonButton" was imported elsewhere, 
-// though we prefer upgrading imports.
-export const NeonButton = PrimaryButton;
 
 const styles = StyleSheet.create({
     container: {
         borderRadius: theme.layout.buttonRadius,
-        paddingVertical: 14,
+        marginVertical: 8,
+    },
+    gradient: {
+        paddingVertical: 16,
         paddingHorizontal: 24,
+        borderRadius: theme.layout.buttonRadius,
         alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: 52,
-        // Add subtle shadow for primary buttons
-        shadowColor: theme.colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 4,
-    },
-    content: {
         flexDirection: 'row',
-        alignItems: 'center',
         justifyContent: 'center',
-    },
-    iconContainer: {
-        marginRight: 8,
+        zIndex: 2,
     },
     text: {
-        fontSize: theme.typography.button.fontSize,
-        fontWeight: theme.typography.button.fontWeight,
-        letterSpacing: theme.typography.button.letterSpacing,
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
+        letterSpacing: 0.5,
+        marginLeft: 8,
     },
+    glow: {
+        position: 'absolute',
+        bottom: -6,
+        left: 20,
+        right: 20,
+        height: 20,
+        borderRadius: 20,
+        zIndex: 1,
+        // Elevation for Android
+        elevation: 8,
+    }
 });
 
-export default PrimaryButton;
+export default NeonButton;

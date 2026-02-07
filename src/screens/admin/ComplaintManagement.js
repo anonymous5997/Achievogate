@@ -1,87 +1,149 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
-import { Alert, FlatList, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useState } from 'react';
+import { Alert, FlatList, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AnimatedCard3D from '../../components/AnimatedCard3D';
 import AnimatedScreenWrapper from '../../components/AnimatedScreenWrapper';
 import CinematicBackground from '../../components/CinematicBackground';
 import CinematicHeader from '../../components/CinematicHeader';
 import ComplaintCard from '../../components/ComplaintCard';
 import useAuth from '../../hooks/useAuth';
-import useComplaints from '../../hooks/useComplaints';
-import useSocieties from '../../hooks/useSocieties';
+import complaintService from '../../services/complaintService'; // Updated Import
 import theme from '../../theme/theme';
 
 const ComplaintManagement = ({ navigation }) => {
     const { userProfile } = useAuth();
-    const { complaints, updateStatus, assignComplaint, createComplaint, deleteComplaint } = useComplaints();
-    const { societies } = useSocieties();
+    const [complaints, setComplaints] = useState([]);
     const [selectedFilter, setSelectedFilter] = useState('all');
-    const [modalVisible, setModalVisible] = useState(false);
-    const [formData, setFormData] = useState({
-        title: '',
-        description: '',
-        category: 'maintenance',
-        priority: 'medium',
-        societyId: '',
-    });
+    const [loading, setLoading] = useState(true);
 
-    const categories = ['maintenance', 'security', 'noise', 'cleanliness', 'other'];
-    const priorities = ['low', 'medium', 'high'];
-    const statuses = ['all', 'pending', 'in-progress', 'resolved'];
+    // Detailed View State
+    const [selectedComplaint, setSelectedComplaint] = useState(null);
+
+    // Initial Load & Refresh
+    useFocusEffect(
+        useCallback(() => {
+            loadComplaints();
+        }, [userProfile?.societyId])
+    );
+
+    const loadComplaints = async () => {
+        if (!userProfile?.societyId) return;
+        setLoading(true);
+        const res = await complaintService.getAllComplaints(userProfile.societyId);
+        if (res.success) {
+            setComplaints(res.complaints);
+        }
+        setLoading(false);
+    };
+
+    const statuses = ['all', 'open', 'in_progress', 'resolved', 'escalated', 'breached'];
 
     const filteredComplaints = selectedFilter === 'all'
         ? complaints
-        : complaints.filter(c => c.status === selectedFilter);
+        : selectedFilter === 'breached'
+            ? complaints.filter(c => c.isBreached)
+            : complaints.filter(c => c.status === selectedFilter);
 
-    const handleCreateComplaint = async () => {
-        if (!formData.title || !formData.description) {
-            Alert.alert('Error', 'Please fill in all required fields');
-            return;
-        }
+    const updateStatus = async (status) => {
+        if (!selectedComplaint) return;
 
-        const complaintData = {
-            ...formData,
-            createdBy: userProfile.id,
-            createdByRole: 'admin',
-        };
-
-        const result = await createComplaint(complaintData);
-        if (result.success) {
-            Alert.alert('Success', 'Complaint created successfully');
-            setModalVisible(false);
-            setFormData({
-                title: '',
-                description: '',
-                category: 'maintenance',
-                priority: 'medium',
-                societyId: '',
-            });
+        const res = await complaintService.updateStatus(selectedComplaint.id, status, userProfile.id, `Admin marked as ${status}`);
+        if (res.success) {
+            Alert.alert('Success', `Complaint updated to ${status}`);
+            setSelectedComplaint(null);
+            loadComplaints();
         } else {
-            Alert.alert('Error', result.error);
+            Alert.alert('Error', res.error);
         }
     };
 
-    const handleComplaintPress = (complaint) => {
-        Alert.alert(
-            complaint.title,
-            complaint.description,
-            [
-                { text: 'Close', style: 'cancel' },
-                {
-                    text: 'Mark Resolved',
-                    onPress: async () => {
-                        await updateStatus(complaint.id, 'resolved');
-                    },
-                },
-                {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: async () => {
-                        await deleteComplaint(complaint.id);
-                    },
-                },
-            ]
-        );
+    const renderDetailModal = () => (
+        <Modal visible={!!selectedComplaint} animationType="slide" presentationStyle="pageSheet">
+            <View style={styles.modalContainer}>
+                {selectedComplaint && (
+                    <>
+                        <View style={styles.modalHeader}>
+                            <TouchableOpacity onPress={() => setSelectedComplaint(null)} style={styles.closeBtn}>
+                                <Ionicons name="close" size={24} color="#333" />
+                            </TouchableOpacity>
+                            <Text style={styles.modalTitle}>Complaint #{selectedComplaint.id.slice(-6).toUpperCase()}</Text>
+                        </View>
+
+                        <ScrollView contentContainerStyle={styles.modalContent}>
+                            {/* Header Status */}
+                            <View style={[styles.statusBanner, { backgroundColor: getStatusColor(selectedComplaint.status) + '20' }]}>
+                                <Text style={[styles.statusBannerText, { color: getStatusColor(selectedComplaint.status) }]}>
+                                    {selectedComplaint.status.toUpperCase()}
+                                </Text>
+                                {selectedComplaint.priority === 'urgent' && (
+                                    <View style={styles.urgentBadge}>
+                                        <Ionicons name="flame" size={14} color="#fff" />
+                                        <Text style={styles.urgentText}>URGENT</Text>
+                                    </View>
+                                )}
+                            </View>
+
+                            <Text style={styles.subject}>{selectedComplaint.title}</Text>
+                            <Text style={styles.description}>{selectedComplaint.description}</Text>
+
+                            <View style={styles.section}>
+                                <Text style={styles.label}>Resident Info</Text>
+                                <View style={styles.infoRow}>
+                                    <Ionicons name="person" size={18} color="#666" />
+                                    <Text style={styles.infoText}>{selectedComplaint.reportedBy || 'Unknown User'}</Text>
+                                </View>
+                                <View style={styles.infoRow}>
+                                    <Ionicons name="home" size={18} color="#666" />
+                                    <Text style={styles.infoText}>Flat {selectedComplaint.flatNumber || 'N/A'}</Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.section}>
+                                <Text style={styles.label}>Timeline</Text>
+                                <View style={styles.timelineItem}>
+                                    <View style={styles.timelineDot} />
+                                    <Text style={styles.timelineText}>Created: {selectedComplaint.createdAt?.toLocaleString()}</Text>
+                                </View>
+                                {/* SLA Display */}
+                                <View style={styles.timelineItem}>
+                                    <View style={[styles.timelineDot, { backgroundColor: selectedComplaint.isBreached ? '#EF4444' : '#F59E0B' }]} />
+                                    <Text style={[styles.timelineText, selectedComplaint.isBreached && { color: '#EF4444', fontWeight: 'bold' }]}>
+                                        {selectedComplaint.isBreached ? 'SLA BREACHED' : 'SLA Target'}: {selectedComplaint.slaTargetTime?.toLocaleString()}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            <Text style={styles.label}>Actions</Text>
+                            <View style={styles.actionGrid}>
+                                <TouchableOpacity style={styles.actionBtn} onPress={() => updateStatus('in_progress')}>
+                                    <Ionicons name="hammer-outline" size={24} color="#3B82F6" />
+                                    <Text style={styles.actionText}>Progress</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.actionBtn} onPress={() => updateStatus('resolved')}>
+                                    <Ionicons name="checkmark-circle-outline" size={24} color="#10B981" />
+                                    <Text style={styles.actionText}>Resolve</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.actionBtn} onPress={() => updateStatus('escalated')}>
+                                    <Ionicons name="alert-circle-outline" size={24} color="#EF4444" />
+                                    <Text style={styles.actionText}>Escalate</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </ScrollView>
+                    </>
+                )}
+            </View>
+        </Modal>
+    );
+
+    const getStatusColor = (s) => {
+        switch (s) {
+            case 'open': return theme.colors.status.error;
+            case 'in_progress': return theme.colors.status.pending;
+            case 'resolved': return theme.colors.status.approved;
+            case 'escalated': return '#EF4444';
+            default: return theme.colors.text.muted;
+        }
     };
 
     return (
@@ -92,8 +154,8 @@ const ComplaintManagement = ({ navigation }) => {
                     subTitle={`${complaints.length} Total`}
                     onBack={() => navigation.goBack()}
                     rightAction={
-                        <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.addBtn}>
-                            <Ionicons name="add-circle" size={28} color={theme.colors.primary} />
+                        <TouchableOpacity onPress={loadComplaints} style={styles.addBtn}>
+                            <Ionicons name="refresh" size={24} color={theme.colors.primary} />
                         </TouchableOpacity>
                     }
                 />
@@ -123,7 +185,9 @@ const ComplaintManagement = ({ navigation }) => {
                             {status !== 'all' && (
                                 <View style={styles.filterBadge}>
                                     <Text style={styles.filterBadgeText}>
-                                        {complaints.filter(c => c.status === status).length}
+                                        {status === 'breached'
+                                            ? complaints.filter(c => c.isBreached).length
+                                            : complaints.filter(c => c.status === status).length}
                                     </Text>
                                 </View>
                             )}
@@ -135,130 +199,30 @@ const ComplaintManagement = ({ navigation }) => {
                     data={filteredComplaints}
                     keyExtractor={item => item.id}
                     contentContainerStyle={styles.list}
+                    refreshing={loading}
+                    onRefresh={loadComplaints}
                     renderItem={({ item }) => (
-                        <ComplaintCard complaint={item} onPress={handleComplaintPress} />
+                        <ComplaintCard
+                            complaint={item}
+                            onPress={() => setSelectedComplaint(item)}
+                            isAdminView={true}
+                        />
                     )}
                     ListEmptyComponent={
-                        <AnimatedCard3D>
-                            <View style={styles.emptyState}>
-                                <Ionicons name="checkmark-done-circle" size={64} color={theme.colors.text.muted} />
-                                <Text style={styles.emptyTitle}>No Complaints</Text>
-                                <Text style={styles.emptySubtitle}>All clear in this category</Text>
-                            </View>
-                        </AnimatedCard3D>
+                        !loading && (
+                            <AnimatedCard3D>
+                                <View style={styles.emptyState}>
+                                    <Ionicons name="checkmark-done-circle" size={64} color={theme.colors.text.muted} />
+                                    <Text style={styles.emptyTitle}>No Complaints</Text>
+                                    <Text style={styles.emptySubtitle}>All clear in this category</Text>
+                                </View>
+                            </AnimatedCard3D>
+                        )
                     }
                 />
 
-                {/* Create Complaint Modal */}
-                <Modal
-                    visible={modalVisible}
-                    animationType="slide"
-                    transparent={true}
-                    onRequestClose={() => setModalVisible(false)}
-                >
-                    <View style={styles.modalOverlay}>
-                        <View style={styles.modalContent}>
-                            <View style={styles.modalHeader}>
-                                <Text style={styles.modalTitle}>Create Complaint</Text>
-                                <TouchableOpacity onPress={() => setModalVisible(false)}>
-                                    <Ionicons name="close-circle" size={28} color={theme.colors.text.muted} />
-                                </TouchableOpacity>
-                            </View>
+                {renderDetailModal()}
 
-                            <ScrollView style={styles.formScroll}>
-                                <Text style={styles.label}>Title *</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={formData.title}
-                                    onChangeText={(text) => setFormData({ ...formData, title: text })}
-                                    placeholder="Brief description"
-                                />
-
-                                <Text style={styles.label}>Description *</Text>
-                                <TextInput
-                                    style={[styles.input, styles.textArea]}
-                                    value={formData.description}
-                                    onChangeText={(text) => setFormData({ ...formData, description: text })}
-                                    placeholder="Detailed explanation"
-                                    multiline
-                                    numberOfLines={4}
-                                />
-
-                                <Text style={styles.label}>Category</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.optionsRow}>
-                                    {categories.map(cat => (
-                                        <TouchableOpacity
-                                            key={cat}
-                                            style={[
-                                                styles.optionChip,
-                                                formData.category === cat && styles.optionChipActive
-                                            ]}
-                                            onPress={() => setFormData({ ...formData, category: cat })}
-                                        >
-                                            <Text style={[
-                                                styles.optionText,
-                                                formData.category === cat && styles.optionTextActive
-                                            ]}>
-                                                {cat}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
-
-                                <Text style={styles.label}>Priority</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.optionsRow}>
-                                    {priorities.map(pri => (
-                                        <TouchableOpacity
-                                            key={pri}
-                                            style={[
-                                                styles.optionChip,
-                                                formData.priority === pri && styles.optionChipActive
-                                            ]}
-                                            onPress={() => setFormData({ ...formData, priority: pri })}
-                                        >
-                                            <Text style={[
-                                                styles.optionText,
-                                                formData.priority === pri && styles.optionTextActive
-                                            ]}>
-                                                {pri}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
-
-                                <Text style={styles.label}>Society</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.optionsRow}>
-                                    {societies.map(soc => (
-                                        <TouchableOpacity
-                                            key={soc.id}
-                                            style={[
-                                                styles.optionChip,
-                                                formData.societyId === soc.id && styles.optionChipActive
-                                            ]}
-                                            onPress={() => setFormData({ ...formData, societyId: soc.id })}
-                                        >
-                                            <Text style={[
-                                                styles.optionText,
-                                                formData.societyId === soc.id && styles.optionTextActive
-                                            ]}>
-                                                {soc.name}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
-                            </ScrollView>
-
-                            <View style={styles.modalActions}>
-                                <TouchableOpacity
-                                    style={[styles.modalBtn, styles.submitBtn]}
-                                    onPress={handleCreateComplaint}
-                                >
-                                    <Text style={styles.submitText}>Create Complaint</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </View>
-                </Modal>
             </AnimatedScreenWrapper>
         </CinematicBackground>
     );
@@ -268,6 +232,7 @@ const styles = StyleSheet.create({
     addBtn: { padding: 4 },
     filterContainer: {
         marginVertical: 12,
+        maxHeight: 50,
     },
     filterContent: {
         paddingHorizontal: 24,
@@ -310,6 +275,7 @@ const styles = StyleSheet.create({
     },
     list: {
         padding: 24,
+        paddingBottom: 100
     },
     emptyState: {
         alignItems: 'center',
@@ -326,105 +292,28 @@ const styles = StyleSheet.create({
         color: theme.colors.text.muted,
     },
 
-    // Modal styles
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'flex-end',
-    },
-    modalContent: {
-        backgroundColor: '#fff',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        maxHeight: '90%',
-        paddingTop: 20,
-    },
-    modalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 24,
-        paddingBottom: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E2E8F0',
-    },
-    modalTitle: {
-        ...theme.typography.h2,
-        fontSize: 22,
-        fontWeight: '700',
-        color: theme.colors.text.primary,
-    },
-    formScroll: {
-        paddingHorizontal: 24,
-        paddingVertical: 20,
-    },
-    label: {
-        ...theme.typography.h3,
-        fontSize: 14,
-        fontWeight: '600',
-        color: theme.colors.text.primary,
-        marginBottom: 8,
-        marginTop: 12,
-    },
-    input: {
-        backgroundColor: '#F8FAFC',
-        borderRadius: 12,
-        padding: 14,
-        fontSize: 15,
-        color: theme.colors.text.primary,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    textArea: {
-        height: 100,
-        textAlignVertical: 'top',
-    },
-    optionsRow: {
-        marginTop: 8,
-        marginBottom: 12,
-    },
-    optionChip: {
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 20,
-        backgroundColor: '#F8FAFC',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        marginRight: 8,
-    },
-    optionChipActive: {
-        backgroundColor: theme.colors.primary,
-        borderColor: theme.colors.primary,
-    },
-    optionText: {
-        fontSize: 13,
-        fontWeight: '600',
-        color: theme.colors.text.secondary,
-        textTransform: 'capitalize',
-    },
-    optionTextActive: {
-        color: '#fff',
-    },
-    modalActions: {
-        padding: 24,
-        borderTopWidth: 1,
-        borderTopColor: '#E2E8F0',
-    },
-    modalBtn: {
-        paddingVertical: 14,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    submitBtn: {
-        backgroundColor: theme.colors.primary,
-    },
-    submitText: {
-        ...theme.typography.h3,
-        fontSize: 16,
-        color: '#fff',
-        fontWeight: '700',
-    },
+    // Modal
+    modalContainer: { flex: 1, backgroundColor: '#fff' },
+    modalHeader: { flexDirection: 'row', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderColor: '#eee' },
+    closeBtn: { marginRight: 16 },
+    modalTitle: { ...theme.typography.h3, fontWeight: '700' },
+    modalContent: { padding: 24 },
+    statusBanner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 8, marginBottom: 16 },
+    statusBannerText: { fontWeight: '800', letterSpacing: 1 },
+    urgentBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EF4444', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
+    urgentText: { color: '#fff', fontSize: 10, fontWeight: 'bold', marginLeft: 4 },
+    subject: { ...theme.typography.h2, fontSize: 20, marginBottom: 8, color: '#1E293B' },
+    description: { ...theme.typography.body1, color: theme.colors.text.secondary, marginBottom: 24, lineHeight: 24 },
+    section: { marginBottom: 24, backgroundColor: '#F8FAFC', padding: 16, borderRadius: 12 },
+    label: { fontSize: 12, fontWeight: '700', color: theme.colors.text.muted, marginBottom: 12, textTransform: 'uppercase' },
+    infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+    infoText: { marginLeft: 12, color: '#333', fontSize: 15, fontWeight: '500' },
+    timelineItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+    timelineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.primary, marginRight: 12 },
+    timelineText: { color: theme.colors.text.secondary, fontSize: 13 },
+    actionGrid: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+    actionBtn: { flex: 1, alignItems: 'center', padding: 12, backgroundColor: '#F3F4F6', borderRadius: 12, marginHorizontal: 4 },
+    actionText: { marginTop: 8, fontSize: 12, fontWeight: '600', color: '#333' }
 });
 
 export default ComplaintManagement;

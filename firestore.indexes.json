@@ -5,7 +5,7 @@
             "queryScope": "COLLECTION",
             "fields": [
                 {
-                    "fieldPath": "flatNumber",
+                    "fieldPath": "societyId",
                     "order": "ASCENDING"
                 },
                 {
@@ -19,11 +19,187 @@
             "queryScope": "COLLECTION",
             "fields": [
                 {
+                    "fieldPath": "societyId",
+                    "order": "ASCENDING"
+                },
+                {
                     "fieldPath": "status",
                     "order": "ASCENDING"
                 },
                 {
                     "fieldPath": "entryTime",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "visitors",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "societyId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "flatNumber",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "entryTime",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "complaints",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "societyId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "complaints",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "societyId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "complaints",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "societyId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "priority",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "parcels",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "societyId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "parcels",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "societyId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "parcels",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "societyId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "flatNumber",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "users",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "societyId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "role",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "name",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "users",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "societyId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "flatNumber",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "name",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "incidents",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "societyId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
                     "order": "DESCENDING"
                 }
             ]

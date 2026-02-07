@@ -1,15 +1,40 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
-import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import AnimatedCard3D from '../../components/AnimatedCard3D';
-import AnimatedScreenWrapper from '../../components/AnimatedScreenWrapper';
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import CinematicBackground from '../../components/CinematicBackground';
-import CinematicButton from '../../components/CinematicButton';
 import CinematicHeader from '../../components/CinematicHeader';
+import CinematicInput from '../../components/CinematicInput';
+import NeoCard from '../../components/NeoCard';
+import NeonButton from '../../components/NeonButton';
 import useAuth from '../../hooks/useAuth';
 import complaintService from '../../services/complaintService';
 import theme from '../../theme/theme';
+
+const PriorityChip = ({ level, selected, onSelect }) => {
+    const getColor = () => {
+        switch (level) {
+            case 'high': return '#EF4444';
+            case 'medium': return '#F59E0B';
+            case 'low': return '#10B981';
+            default: return theme.colors.primary;
+        }
+    };
+    const color = getColor();
+
+    return (
+        <TouchableOpacity
+            onPress={() => onSelect(level)}
+            style={[
+                styles.chip,
+                selected && { backgroundColor: `${color}20`, borderColor: color }
+            ]}
+        >
+            <Text style={[styles.chipText, selected && { color: color }]}>{level.toUpperCase()}</Text>
+        </TouchableOpacity>
+    );
+};
 
 const ResidentComplaintScreen = ({ navigation }) => {
     const { userProfile } = useAuth();
@@ -27,308 +52,191 @@ const ResidentComplaintScreen = ({ navigation }) => {
         { id: 'security', label: 'Security', icon: 'shield-checkmark' },
         { id: 'noise', label: 'Noise', icon: 'volume-high' },
         { id: 'cleanliness', label: 'Cleanliness', icon: 'trash' },
-        { id: 'other', label: 'Other', icon: 'ellipsis-horizontal' },
     ];
-
-    const priorities = ['low', 'medium', 'high'];
 
     const handleTakePhoto = async () => {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== 'granted') {
-            Alert.alert('Permission needed', 'Camera permission is required');
-            return;
-        }
-
+        if (status !== 'granted') return Alert.alert('Permission needed');
         const result = await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [4, 3],
-            quality: 0.7,
+            allowsEditing: true, aspect: [4, 3], quality: 0.7,
         });
-
-        if (!result.canceled) {
-            setPhotoUri(result.assets[0].uri);
-        }
+        if (!result.canceled) setPhotoUri(result.assets[0].uri);
     };
 
     const handleSubmit = async () => {
-        if (!formData.title || !formData.description) {
-            Alert.alert('Error', 'Please fill in title and description');
-            return;
-        }
-
+        if (!formData.description) return Alert.alert('Missing Info', 'Description is required.');
         setLoading(true);
-        try {
-            const complaintData = {
-                ...formData,
-                createdBy: userProfile.id,
-                createdByRole: 'resident',
-                societyId: userProfile.societyId || '',
-                flatNumber: userProfile.flatNumber || '',
-                photos: photoUri ? [photoUri] : [],
-            };
 
-            const result = await complaintService.createComplaint(complaintData);
+        const complaintData = {
+            ...formData,
+            userId: userProfile.uid || userProfile.id,
+            societyId: userProfile.societyId || '',
+            flatNumber: userProfile.flatNumber || '',
+            photos: photoUri ? [photoUri] : [],
+        };
 
-            if (result.success) {
-                Alert.alert(
-                    'Success',
-                    'Your complaint has been submitted successfully',
-                    [{ text: 'OK', onPress: () => navigation.goBack() }]
-                );
-            } else {
-                Alert.alert('Error', result.error);
-            }
-        } catch (error) {
-            Alert.alert('Error', 'Failed to submit complaint');
-        } finally {
-            setLoading(false);
+        const result = await complaintService.fileComplaint(complaintData);
+        setLoading(false);
+
+        if (result.success) {
+            Alert.alert('Complaint Filed', 'We have received your report.', [{ text: 'OK', onPress: () => navigation.goBack() }]);
+        } else {
+            Alert.alert('Error', result.error);
         }
     };
 
     return (
         <CinematicBackground>
-            <AnimatedScreenWrapper noPadding>
-                <CinematicHeader
-                    title="File Complaint"
-                    subTitle="Report an issue"
-                    onBack={() => navigation.goBack()}
-                />
+            <CinematicHeader title="REPORT ISSUE" subTitle="SUBMIT COMPLAINT" onBack={() => navigation.goBack()} />
 
-                <ScrollView contentContainerStyle={styles.content}>
+            <ScrollView contentContainerStyle={styles.content}>
+                <Animated.View entering={FadeInDown.springify()}>
+                    <NeoCard glass={true} padding={20}>
+                        <View style={styles.formGap}>
 
-                    <AnimatedCard3D index={0}>
-                        <Text style={styles.infoText}>
-                            <Ionicons name="information-circle" size={16} color={theme.colors.primary} />
-                            {' '}Your complaint will be reviewed by the admin and assigned for resolution.
-                        </Text>
-                    </AnimatedCard3D>
-
-                    <AnimatedCard3D index={1}>
-                        <Text style={styles.label}>Title *</Text>
-                        <TextInput
-                            style={styles.input}
-                            value={formData.title}
-                            onChangeText={(text) => setFormData({ ...formData, title: text })}
-                            placeholder="Brief description of the issue"
-                        />
-
-                        <Text style={styles.label}>Description *</Text>
-                        <TextInput
-                            style={[styles.input, styles.textArea]}
-                            value={formData.description}
-                            onChangeText={(text) => setFormData({ ...formData, description: text })}
-                            placeholder="Provide detailed information about the issue"
-                            multiline
-                            numberOfLines={5}
-                        />
-
-                        <Text style={styles.label}>Category</Text>
-                        <View style={styles.categoryGrid}>
-                            {categories.map(cat => (
-                                <TouchableOpacity
-                                    key={cat.id}
-                                    style={[
-                                        styles.categoryBtn,
-                                        formData.category === cat.id && styles.categoryBtnActive
-                                    ]}
-                                    onPress={() => setFormData({ ...formData, category: cat.id })}
-                                >
-                                    <Ionicons
-                                        name={cat.icon}
-                                        size={24}
-                                        color={formData.category === cat.id ? theme.colors.primary : theme.colors.text.muted}
-                                    />
-                                    <Text style={[
-                                        styles.categoryText,
-                                        formData.category === cat.id && styles.categoryTextActive
-                                    ]}>
-                                        {cat.label}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-
-                        <Text style={styles.label}>Priority</Text>
-                        <View style={styles.priorityRow}>
-                            {priorities.map(pri => (
-                                <TouchableOpacity
-                                    key={pri}
-                                    style={[
-                                        styles.priorityChip,
-                                        formData.priority === pri && styles.priorityChipActive
-                                    ]}
-                                    onPress={() => setFormData({ ...formData, priority: pri })}
-                                >
-                                    <Text style={[
-                                        styles.priorityText,
-                                        formData.priority === pri && styles.priorityTextActive
-                                    ]}>
-                                        {pri.toUpperCase()}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-
-                        <Text style={styles.label}>Photo (Optional)</Text>
-                        {photoUri ? (
-                            <View style={styles.photoContainer}>
-                                <Image source={{ uri: photoUri }} style={styles.photo} />
-                                <TouchableOpacity
-                                    style={styles.removePhotoBtn}
-                                    onPress={() => setPhotoUri(null)}
-                                >
-                                    <Ionicons name="close-circle" size={28} color={theme.colors.status.denied} />
-                                </TouchableOpacity>
+                            {/* Categories */}
+                            <Text style={styles.sectionLabel}>CATEGORY</Text>
+                            <View style={styles.grid}>
+                                {categories.map(cat => (
+                                    <TouchableOpacity
+                                        key={cat.id}
+                                        style={[
+                                            styles.catBtn,
+                                            formData.category === cat.id && styles.catBtnActive
+                                        ]}
+                                        onPress={() => setFormData({ ...formData, category: cat.id })}
+                                    >
+                                        <Ionicons
+                                            name={cat.icon}
+                                            size={20}
+                                            color={formData.category === cat.id ? '#fff' : theme.colors.text.muted}
+                                        />
+                                        <Text style={[
+                                            styles.catText,
+                                            formData.category === cat.id && styles.catTextActive
+                                        ]}>{cat.label}</Text>
+                                    </TouchableOpacity>
+                                ))}
                             </View>
-                        ) : (
-                            <TouchableOpacity
-                                style={styles.photoPlaceholder}
-                                onPress={handleTakePhoto}
-                            >
-                                <Ionicons name="camera" size={32} color={theme.colors.text.muted} />
-                                <Text style={styles.photoText}>Take Photo</Text>
-                            </TouchableOpacity>
-                        )}
 
-                        <CinematicButton
-                            title="Submit Complaint"
-                            onPress={handleSubmit}
-                            loading={loading}
-                            style={{ marginTop: 20 }}
-                        />
-                    </AnimatedCard3D>
+                            <CinematicInput
+                                label="SUBJECT"
+                                value={formData.title}
+                                onChangeText={t => setFormData({ ...formData, title: t })}
+                                icon={<Ionicons name="chatbubble-ellipses" size={20} color={theme.colors.primary} />}
+                            />
 
-                </ScrollView>
-            </AnimatedScreenWrapper>
+                            <CinematicInput
+                                label="DETAILS"
+                                value={formData.description}
+                                onChangeText={t => setFormData({ ...formData, description: t })}
+                                multiline
+                                numberOfLines={4}
+                                icon={<Ionicons name="document-text" size={20} color={theme.colors.secondary} />}
+                            />
+
+                            <Text style={styles.sectionLabel}>PRIORITY</Text>
+                            <View style={styles.priorityRow}>
+                                {['low', 'medium', 'high'].map(p => (
+                                    <PriorityChip
+                                        key={p}
+                                        level={p}
+                                        selected={formData.priority === p}
+                                        onSelect={l => setFormData({ ...formData, priority: l })}
+                                    />
+                                ))}
+                            </View>
+
+                            <Text style={styles.sectionLabel}>EVIDENCE (OPTIONAL)</Text>
+                            {photoUri ? (
+                                <View style={styles.photoContainer}>
+                                    <Image source={{ uri: photoUri }} style={styles.photo} />
+                                    <TouchableOpacity onPress={() => setPhotoUri(null)} style={styles.removeBtn}>
+                                        <Ionicons name="close" size={16} color="#fff" />
+                                    </TouchableOpacity>
+                                </View>
+                            ) : (
+                                <TouchableOpacity onPress={handleTakePhoto} style={styles.uploadBtn}>
+                                    <Ionicons name="camera" size={24} color={theme.colors.text.muted} />
+                                    <Text style={styles.uploadText}>Tap to Capture</Text>
+                                </TouchableOpacity>
+                            )}
+
+                            <NeonButton
+                                title="SUBMIT REPORT"
+                                onPress={handleSubmit}
+                                loading={loading}
+                                style={{ marginTop: 12 }}
+                            />
+                        </View>
+                    </NeoCard>
+                </Animated.View>
+            </ScrollView>
         </CinematicBackground>
     );
 };
 
 const styles = StyleSheet.create({
     content: { padding: 24 },
-    infoText: {
-        ...theme.typography.body1,
-        fontSize: 14,
-        color: theme.colors.text.secondary,
-        lineHeight: 20,
-        padding: 16,
-        backgroundColor: '#EEF2FF',
-        borderRadius: 12,
-    },
-
-    // Form
-    label: {
-        ...theme.typography.h3,
-        fontSize: 14,
-        fontWeight: '600',
-        color: theme.colors.text.primary,
-        marginBottom: 8,
-        marginTop: 16,
-    },
-    input: {
-        backgroundColor: '#F8FAFC',
-        borderRadius: 12,
-        padding: 14,
-        fontSize: 15,
-        color: theme.colors.text.primary,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    textArea: {
-        height: 120,
-        textAlignVertical: 'top',
-    },
-
-    // Category
-    categoryGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 10,
-    },
-    categoryBtn: {
-        width: '48%',
-        paddingVertical: 16,
-        borderRadius: 12,
-        borderWidth: 2,
-        borderColor: '#E2E8F0',
-        alignItems: 'center',
-        backgroundColor: '#F8FAFC',
-    },
-    categoryBtnActive: {
-        borderColor: theme.colors.primary,
-        backgroundColor: '#EEF2FF',
-    },
-    categoryText: {
-        ...theme.typography.body1,
-        fontSize: 13,
-        fontWeight: '600',
+    formGap: { gap: 20 },
+    sectionLabel: {
+        ...theme.typography.caption,
         color: theme.colors.text.muted,
-        marginTop: 8,
+        marginLeft: 4,
+        marginBottom: 8,
     },
-    categoryTextActive: {
-        color: theme.colors.primary,
-    },
-
-    // Priority
-    priorityRow: {
+    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    catBtn: {
+        width: '48%',
         flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: 'rgba(255,255,255,0.05)',
         gap: 8,
     },
-    priorityChip: {
-        flex: 1,
-        paddingVertical: 12,
-        borderRadius: 10,
-        alignItems: 'center',
-        backgroundColor: '#F8FAFC',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-    },
-    priorityChipActive: {
+    catBtnActive: {
         backgroundColor: theme.colors.primary,
         borderColor: theme.colors.primary,
     },
-    priorityText: {
-        fontSize: 13,
-        fontWeight: '700',
-        color: theme.colors.text.secondary,
+    catText: { color: theme.colors.text.muted, fontSize: 13, fontWeight: '600' },
+    catTextActive: { color: '#fff' },
+
+    priorityRow: { flexDirection: 'row', gap: 10 },
+    chip: {
+        flex: 1,
+        alignItems: 'center',
+        padding: 12,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: 'rgba(255,255,255,0.05)',
     },
-    priorityTextActive: {
-        color: '#fff',
+    chipText: {
+        color: theme.colors.text.muted,
+        fontSize: 12,
+        fontWeight: '700',
     },
 
-    // Photo
-    photoPlaceholder: {
-        height: 120,
+    uploadBtn: {
+        height: 100,
         borderRadius: 12,
         borderWidth: 2,
-        borderColor: '#E2E8F0',
+        borderColor: 'rgba(255,255,255,0.1)',
         borderStyle: 'dashed',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#F8FAFC',
+        backgroundColor: 'rgba(255,255,255,0.02)',
     },
-    photoText: {
-        ...theme.typography.body1,
-        fontSize: 14,
-        color: theme.colors.text.muted,
-        marginTop: 8,
-    },
-    photoContainer: {
-        position: 'relative',
-    },
-    photo: {
-        width: '100%',
-        height: 200,
-        borderRadius: 12,
-    },
-    removePhotoBtn: {
-        position: 'absolute',
-        top: 8,
-        right: 8,
-        backgroundColor: '#fff',
-        borderRadius: 14,
-    },
+    uploadText: { color: theme.colors.text.muted, fontSize: 12, marginTop: 8 },
+    photoContainer: { position: 'relative' },
+    photo: { width: '100%', height: 200, borderRadius: 12 },
+    removeBtn: {
+        position: 'absolute', top: 8, right: 8,
+        backgroundColor: 'rgba(0,0,0,0.6)', padding: 6, borderRadius: 12
+    }
 });
 
 export default ResidentComplaintScreen;

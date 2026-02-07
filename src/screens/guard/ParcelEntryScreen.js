@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useState } from 'react';
-import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import AnimatedCard3D from '../../components/AnimatedCard3D';
 import AnimatedScreenWrapper from '../../components/AnimatedScreenWrapper';
 import CinematicBackground from '../../components/CinematicBackground';
@@ -9,6 +9,7 @@ import CinematicButton from '../../components/CinematicButton';
 import CinematicHeader from '../../components/CinematicHeader';
 import useAuth from '../../hooks/useAuth';
 import useSocieties from '../../hooks/useSocieties';
+import flatService from '../../services/flatService'; // NEW
 import parcelService from '../../services/parcelService';
 import theme from '../../theme/theme';
 
@@ -23,6 +24,21 @@ const ParcelEntryScreen = ({ navigation }) => {
         trackingNumber: '',
     });
     const [photoUri, setPhotoUri] = useState(null);
+
+    // Flat Selector State
+    const [flats, setFlats] = useState([]);
+    const [loadingFlats, setLoadingFlats] = useState(false);
+    const [flatSelectorVisible, setFlatSelectorVisible] = useState(false);
+
+    useEffect(() => {
+        if (userProfile?.societyId) {
+            setLoadingFlats(true);
+            flatService.getFlatsBySociety(userProfile.societyId).then(res => {
+                if (res.success) setFlats(res.flats);
+                setLoadingFlats(false);
+            });
+        }
+    }, [userProfile?.societyId]);
 
     const handleTakePhoto = async () => {
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -58,9 +74,10 @@ const ParcelEntryScreen = ({ navigation }) => {
                 trackingNumber: formData.trackingNumber,
                 societyId: userProfile.societyId || '',
                 createdBy: userProfile.name || 'Guard',
+                photoUrl: photoUri // Pass the local URI (Service handles upload ideally, or assumes local for demo)
             };
 
-            const result = await parcelService.addParcel(parcelData);
+            const result = await parcelService.addParcel(formData.flatNumber, parcelData);
 
             if (result.success) {
                 Alert.alert('Success', 'Parcel logged successfully', [
@@ -124,12 +141,50 @@ const ParcelEntryScreen = ({ navigation }) => {
                         )}
 
                         <Text style={styles.label}>Flat Number *</Text>
-                        <TextInput
-                            style={styles.input}
-                            value={formData.flatNumber}
-                            onChangeText={(text) => setFormData({ ...formData, flatNumber: text })}
-                            placeholder="e.g. A-101"
-                        />
+                        <Text style={styles.label}>Flat Number *</Text>
+                        <TouchableOpacity
+                            style={styles.selector}
+                            onPress={() => setFlatSelectorVisible(true)}
+                        >
+                            <Text style={formData.flatNumber ? styles.selectorText : styles.placeholderText}>
+                                {formData.flatNumber || 'Select Flat'}
+                            </Text>
+                            <Ionicons name="chevron-down" size={20} color={theme.colors.text.muted} />
+                        </TouchableOpacity>
+
+                        {/* Flat Selector Modal */}
+                        <Modal visible={flatSelectorVisible} animationType="slide" transparent>
+                            <View style={styles.modalContainer}>
+                                <View style={styles.modalContent}>
+                                    <Text style={styles.modalTitle}>Select Flat</Text>
+                                    <ScrollView>
+                                        {loadingFlats ? (
+                                            <ActivityIndicator color={theme.colors.primary} />
+                                        ) : (
+                                            flats.map(flat => (
+                                                <TouchableOpacity
+                                                    key={flat.id}
+                                                    style={styles.modalItem}
+                                                    onPress={() => {
+                                                        setFormData({ ...formData, flatNumber: flat.flatNumber });
+                                                        setFlatSelectorVisible(false);
+                                                    }}
+                                                >
+                                                    <Text style={styles.modalItemText}>{flat.flatNumber}</Text>
+                                                    <Text style={styles.modalItemSub}>{flat.occupancyStatus}</Text>
+                                                </TouchableOpacity>
+                                            ))
+                                        )}
+                                    </ScrollView>
+                                    <TouchableOpacity
+                                        style={styles.closeBtn}
+                                        onPress={() => setFlatSelectorVisible(false)}
+                                    >
+                                        <Text style={styles.closeBtnText}>Cancel</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </Modal>
 
                         <Text style={styles.label}>Package Description *</Text>
                         <TextInput
@@ -232,6 +287,55 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E2E8F0',
     },
+    selector: {
+        backgroundColor: '#F8FAFC',
+        borderRadius: 12,
+        padding: 14,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    selectorText: { fontSize: 15, color: theme.colors.text.primary },
+    placeholderText: { fontSize: 15, color: theme.colors.text.muted },
+
+    // Modal
+    modalContainer: {
+        flex: 1,
+        justifyContent: 'flex-end',
+        backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    modalContent: {
+        backgroundColor: '#fff',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 20,
+        maxHeight: '80%',
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        marginBottom: 15,
+        color: '#1a1a1a',
+    },
+    modalItem: {
+        paddingVertical: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    modalItemText: { fontSize: 16, fontWeight: '500' },
+    modalItemSub: { fontSize: 12, color: '#666', textTransform: 'capitalize' },
+    closeBtn: {
+        marginTop: 15,
+        backgroundColor: '#f4f4f5',
+        padding: 15,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    closeBtnText: { color: '#333', fontWeight: '600' },
 });
 
 export default ParcelEntryScreen;

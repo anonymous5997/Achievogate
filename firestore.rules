@@ -1,0 +1,212 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Enterprise Helper Functions ---
+
+    // 1. Authentication Check
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // 2. Get User Profile Data (Efficiently)
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // 3. Role Checking (Strict)
+    function isRole(role) {
+      return isSignedIn() && getUserData().role == role;
+    }
+    
+    // 4. Super Admin (Global Scope - Optional, if you have a god-mode user)
+    // function isSuperAdmin() {
+    //   return isRole('superadmin');
+    // }
+
+    // 5. Society Scoping (CRITICAL)
+    // Checks if the document belongs to the same society as the user
+    function isSameSociety(docSocietyId) {
+      return isSignedIn() && getUserData().societyId == docSocietyId;
+    }
+
+    // 6. Write Validation
+    // Ensures user isn't spoofing the societyId in the payload
+    function isValidSocietyWrite() {
+      return request.resource.data.societyId == getUserData().societyId;
+    }
+
+    // --- Collections ---
+
+    // 1. Audit Logs (Immutable - Non-Negotiable)
+    match /auditLogs/{logId} {
+      // Only authenticated users can create logs (usually via app or cloud function)
+      // Must enforce that the log matches their society
+      allow create: if isSignedIn() && 
+                    isValidSocietyWrite() &&
+                    request.resource.data.actorUserId == request.auth.uid;
+      
+      // Only Admins can read logs, and ONLY for their own society
+      allow read: if isRole('admin') && isSameSociety(resource.data.societyId);
+      
+      // NO ONE can update or delete logs (Immutable)
+      allow update, delete: if false; 
+    }
+
+    // 2. Flats (New Core Entity)
+    match /flats/{flatId} {
+      // Admins and Guards see all flats in their society
+      // Residents ONLY see their own flat data (Privacy)
+      allow read: if isSameSociety(resource.data.societyId) && (
+        isRole('admin') || 
+        isRole('guard') || 
+        (isRole('resident') && resource.data.flatNumber == getUserData().flatNumber)
+      );
+      
+      // Only Admins can create/manage flat structure
+      allow write: if isRole('admin') && isSameSociety(resource.data.societyId);
+    }
+
+    // 3. Users (Enhanced Security)
+    match /users/{userId} {
+      // 1. Read: 
+      // - Admins/Guards: Read all users in their society (Directory/Visitor logs)
+      // - Residents: Read self + family members (if we link them)
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId || 
+        (isSameSociety(resource.data.societyId) && (isRole('admin') || isRole('guard')))
+      );
+
+      // 2. Update:
+      // - Users can update NON-SENSITIVE fields (fcmToken, photoUrl)
+      // - CRITICAL: Prevent users from changing 'role', 'societyId', 'isDeleted'
+      // - Admin can update anyone in their society
+      allow update: if isRole('admin') && isSameSociety(resource.data.societyId) || 
+                    (request.auth.uid == userId && 
+                     request.resource.data.role == resource.data.role && 
+                     request.resource.data.societyId == resource.data.societyId &&
+                     request.resource.data.isDeleted == resource.data.isDeleted); // Prevent self-archive bypass
+      
+      // 3. Create (Sign Up):
+      // - Allow creation if Auth UID matches
+      // - MUST default to 'resident' role if not admin creating it
+      allow create: if request.auth.uid == userId && 
+                    request.resource.data.role == 'resident';
+    }
+
+    // 4. Visitors (Visitor Management)
+    match /visitors/{visitorId} {
+      // Read: Admin/Guard (All), Resident (Own Flat Visitors Only)
+      allow read: if isSameSociety(resource.data.societyId) && (
+        isRole('admin') || 
+        isRole('guard') || 
+        (isRole('resident') && resource.data.flatNumber == getUserData().flatNumber)
+      );
+      
+      // Create: Guard (Entry), Resident (Pre-Invite)
+      allow create: if isSignedIn() && isValidSocietyWrite() && (
+        isRole('guard') || isRole('resident')
+      );
+      
+      // Update: Guard (Checkout), Resident (Approve/Deny), Admin (Fix)
+      allow update: if isSameSociety(resource.data.societyId) && (
+        isRole('guard') || isRole('resident') || isRole('admin')
+      );
+    }
+
+    // 5. Gate Passes (Pre-Approval)
+    match /gatePasses/{passId} {
+      // Read: Guard (Validation), Resident (Own)
+      allow read: if isSameSociety(resource.data.societyId) && (
+        isRole('guard') || 
+        (isRole('resident') && resource.data.flatNumber == getUserData().flatNumber)
+      );
+      
+      // Create: Resident Only
+      allow create: if isRole('resident') && isValidSocietyWrite();
+      
+      // Update: System/Guard (Mark used)
+      allow update: if isSameSociety(resource.data.societyId) && (isRole('guard') || isRole('admin'));
+    }
+
+    // 6. Parcels
+    match /parcels/{parcelId} {
+      allow read: if isSameSociety(resource.data.societyId) && (
+        isRole('admin') || 
+        isRole('guard') || 
+        (isRole('resident') && resource.data.flatNumber == getUserData().flatNumber)
+      );
+      
+      allow create: if isRole('guard') && isValidSocietyWrite();
+      
+      allow update: if isSameSociety(resource.data.societyId) && (
+        isRole('guard') || isRole('resident')
+      ); // Resident marks collected, Guard marks delivered
+    }
+
+    // 7. Complaints
+    match /complaints/{complaintId} {
+      allow read: if isSameSociety(resource.data.societyId) && (
+        isRole('admin') || 
+        (isRole('resident') && resource.data.createdBy == request.auth.uid)
+      );
+      
+      allow create: if isRole('resident') && isValidSocietyWrite();
+      
+      allow update: if isSameSociety(resource.data.societyId) && (
+        isRole('admin') || request.auth.uid == resource.data.createdBy
+      );
+    }
+
+    // 8. Incidents (SOS)
+    match /incidents/{incidentId} {
+      // Read: Everyone in the society (Safety First!)
+      allow read: if isSameSociety(resource.data.societyId);
+      
+      // Create: Any authenticated user in the society
+      allow create: if isSignedIn() && isValidSocietyWrite();
+      
+      // Update: Admin or Guard (Resolve), or Creator (Cancel)
+      allow update: if isSameSociety(resource.data.societyId) && (
+        isRole('admin') || isRole('guard') || request.auth.uid == resource.data.reportedBy
+      );
+    }
+
+    // 9. Notification Queue (Backend Worker)
+    match /notificationQueue/{notifId} {
+       // Only creatable by Client logic if we trust it, better if Cloud Function triggers off other docs
+       // For MVP/Demo: Client creates requests
+       allow create: if isSignedIn();
+       allow read: if false; // Only Backend Worker needs full read
+       allow update: if false; // Backend Worker uses Admin SDK
+    }
+
+    // 9. Societies (Settings & Subscriptions)
+    match /societies/{societyId} {
+      // Read Basic Info: Everyone in it
+      allow read: if isSignedIn(); // Broad read needed for "Select Society" on signup
+      
+      // Write: Only Admin of that society (Settings update)
+      allow update: if isRole('admin') && isSameSociety(societyId);
+      
+      // Create: Super Admin or System
+      allow create: if false; 
+    }
+    
+    // 10. Notices
+    match /notices/{noticeId} {
+      allow read: if isSameSociety(resource.data.societyId);
+      allow write: if isRole('admin') && isValidSocietyWrite();
+    }
+    
+    // 11. Feature Flags & Subscriptions (Read Only for App)
+    match /featureFlags/{societyId} {
+      allow read: if isSameSociety(societyId);
+      allow write: if false; // System Only
+    }
+    match /subscriptions/{societyId} {
+      allow read: if isRole('admin') && isSameSociety(societyId);
+      allow write: if false; // System Only
+    }
+  }
+}

@@ -1,5 +1,6 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AnimatedCard3D from '../../components/AnimatedCard3D';
 import AnimatedScreenWrapper from '../../components/AnimatedScreenWrapper';
 import CinematicBackground from '../../components/CinematicBackground';
@@ -8,6 +9,10 @@ import CinematicListStagger from '../../components/CinematicListStagger';
 import useAuth from '../../hooks/useAuth';
 import useVisitors from '../../hooks/useVisitors';
 import theme from '../../theme/theme';
+
+import { ScrollView } from 'react-native-gesture-handler'; // Added for ScrollView
+import Swipeable from 'react-native-gesture-handler/Swipeable';
+import Animated, { runOnJS } from 'react-native-reanimated';
 
 const VisitorList = ({ navigation }) => {
     const { userProfile } = useAuth();
@@ -31,20 +36,94 @@ const VisitorList = ({ navigation }) => {
         );
     };
 
-    const renderItem = ({ item, index }) => (
-        // Pass index to 3D card for staggered entry
-        <AnimatedCard3D index={index} glowColor={theme.colors.primary} style={{ marginVertical: 6 }}>
-            <View style={styles.cardRow}>
-                <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{item.visitorName?.[0] || 'V'}</Text>
-                </View>
-                <View style={{ flex: 1, marginLeft: 16 }}>
-                    <Text style={styles.name}>{item.visitorName}</Text>
-                    <Text style={styles.details}>Flat {item.flatNumber} • {item.purpose}</Text>
-                </View>
-                <StatusBadge status={item.status} />
+    const renderRightActions = (progress, dragX) => {
+        const trans = dragX.interpolate({
+            inputRange: [-100, 0],
+            outputRange: [0, 100],
+            extrapolate: 'clamp',
+        });
+
+        return (
+            <View style={styles.rightAction}>
+                <Animated.Text style={[styles.actionText, { transform: [{ translateX: trans }] }]}>
+                    DENY
+                </Animated.Text>
+                <Ionicons name="close-circle" size={32} color="#fff" />
             </View>
-        </AnimatedCard3D>
+        );
+    };
+
+    const renderLeftActions = (progress, dragX) => {
+        const trans = dragX.interpolate({
+            inputRange: [0, 100],
+            outputRange: [-100, 0],
+            extrapolate: 'clamp',
+        });
+
+        return (
+            <View style={styles.leftAction}>
+                <Ionicons name="checkmark-circle" size={32} color="#fff" />
+                <Animated.Text style={[styles.actionText, { transform: [{ translateX: trans }] }]}>
+                    APPROVE
+                </Animated.Text>
+            </View>
+        );
+    };
+
+    const handleSwipe = (direction, item) => {
+        // Placeholder for logic
+        console.log(`Swiped ${direction} on ${item.visitorName} `);
+    };
+
+    const renderItem = ({ item, index }) => (
+        <Swipeable
+            renderRightActions={renderRightActions}
+            renderLeftActions={renderLeftActions}
+            onSwipeableOpen={(direction) => {
+                if (direction === 'left') runOnJS(handleSwipe)('approve', item);
+                else runOnJS(handleSwipe)('deny', item);
+            }}
+            containerStyle={{ marginVertical: 6 }}
+        >
+            <AnimatedCard3D
+                index={index}
+                glowColor={item.riskLevel === 'high' ? theme.colors.status.denied : theme.colors.primary}
+                style={{ marginVertical: 0 }} // Remove conflicting margin
+                onPress={() => navigation.navigate('VisitorPassScreen', { invite: item })}
+            >
+                <View style={styles.cardRow}>
+                    <Animated.View
+                        style={styles.avatar}
+                        sharedTransitionTag={`visitor - avatar - ${item.id} `}
+                    >
+                        {item.photoUrl ? (
+                            <Image source={{ uri: item.photoUrl }} style={styles.avatarImage} />
+                        ) : (
+                            <Text style={styles.avatarText}>{item.visitorName?.[0] || 'V'}</Text>
+                        )}
+                    </Animated.View>
+                    <View style={{ flex: 1, marginLeft: 16 }}>
+                        <View style={styles.headerRow}>
+                            <Text style={styles.name}>{item.visitorName}</Text>
+                            {item.riskLevel === 'high' && (
+                                <View style={styles.riskBadge}>
+                                    <Ionicons name="warning" size={12} color="#fff" />
+                                    <Text style={styles.riskText}>RISK</Text>
+                                </View>
+                            )}
+                        </View>
+                        <Text style={styles.details}>Flat {item.flatNumber} • {item.purpose}</Text>
+                        {item.vehicleNumber ? (
+                            <View style={styles.vehicleRow}>
+                                <Ionicons name="car" size={12} color={theme.colors.text.muted} />
+                                <Text style={styles.vehicleText}>{item.vehicleNumber}</Text>
+                            </View>
+                        ) : null}
+                    </View>
+                    <StatusBadge status={item.status} />
+                </View>
+            </AnimatedCard3D>
+        </Swipeable>
     );
 
     return (
@@ -125,7 +204,36 @@ const styles = StyleSheet.create({
         paddingHorizontal: 10, paddingVertical: 4,
         borderRadius: 12,
     },
-    badgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 }
+    badgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+    avatarImage: { width: '100%', height: '100%', borderRadius: 16 },
+    headerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    riskBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.status.denied, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, gap: 2 },
+    riskText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+    vehicleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+    vehicleText: { fontSize: 12, color: theme.colors.text.muted, fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto' },
+    leftAction: {
+        flex: 1,
+        backgroundColor: theme.colors.status.success,
+        justifyContent: 'center',
+        alignItems: 'flex-start',
+        paddingLeft: 20,
+        borderRadius: 16,
+        marginVertical: 6,
+    },
+    rightAction: {
+        flex: 1,
+        backgroundColor: theme.colors.status.danger,
+        justifyContent: 'center',
+        alignItems: 'flex-end',
+        paddingRight: 20,
+        borderRadius: 16,
+        marginVertical: 6,
+    },
+    actionText: {
+        color: 'white',
+        fontWeight: 'bold',
+        paddingHorizontal: 10,
+    },
 });
 
 export default VisitorList;

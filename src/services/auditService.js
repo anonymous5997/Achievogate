@@ -1,106 +1,48 @@
-import * as Device from 'expo-device';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { Platform } from 'react-native';
 import { db } from '../../firebaseConfig';
 
 /**
- * Audit Service - Logs all important actions for compliance
+ * Audit Service - Logs critical actions for compliance and tracking
  */
-
 class AuditService {
+
+    ACTION_TYPES = {
+        RESIDENT_CREATED: 'RESIDENT_CREATED',
+        RESIDENT_UPDATED: 'RESIDENT_UPDATED',
+        RESIDENT_DELETED: 'RESIDENT_DELETED',
+        BULK_IMPORT: 'BULK_IMPORT',
+        ROLE_CHANGE: 'ROLE_CHANGE',
+        STATUS_CHANGE: 'STATUS_CHANGE'
+    };
+
     /**
-     * Log an action
+     * Log an action to the 'auditLogs' collection
+     * @param {string} actionType - One of ACTION_TYPES
+     * @param {string} actorUserId - ID of the admin performing the action
+     * @param {string} targetUserId - ID of the user being affected
+     * @param {string} societyId - ID of the society
+     * @param {object} metadata - Additional details (e.g., specific fields changed)
      */
-    async logAction(actionType, performedBy, performedByName, targetId, targetType, changes = {}) {
+    async logAction(actionType, actorUserId, targetUserId, societyId, metadata = {}) {
         try {
-            const auditData = {
-                action: actionType,
-                performedBy,
-                performedByName,
-                targetId,
-                targetType,
-                changes,
+            const logEntry = {
+                actionType,
+                actorUserId,
+                targetUserId,
+                societyId,
+                metadata,
                 timestamp: serverTimestamp(),
-                deviceInfo: {
-                    platform: Platform.OS,
-                    deviceModel: Device.modelName || 'Unknown',
-                    osVersion: Device.osVersion || 'Unknown',
-                },
+                deviceInfo: 'App/Web Console' // Placeholder for real device info
             };
 
-            await addDoc(collection(db, 'auditLogs'), auditData);
+            await addDoc(collection(db, 'auditLogs'), logEntry);
+            console.log(`[Audit] Logged: ${actionType}`);
             return { success: true };
         } catch (error) {
-            console.error('Error logging audit:', error);
+            console.error('[Audit] Failed to log action:', error);
+            // Audit logging failure should not break the main flow, but we log it to console
             return { success: false, error: error.message };
         }
-    }
-
-    // Specific audit log methods
-    async logVisitorApproval(userId, userName, visitorId, visitorName) {
-        return this.logAction(
-            'visitor.approved',
-            userId,
-            userName,
-            visitorId,
-            'visitor',
-            { visitorName, status: 'approved' }
-        );
-    }
-
-    async logVisitorDenial(userId, userName, visitorId, visitorName) {
-        return this.logAction(
-            'visitor.denied',
-            userId,
-            userName,
-            visitorId,
-            'visitor',
-            { visitorName, status: 'denied' }
-        );
-    }
-
-    async logComplaintStatusChange(userId, userName, complaintId, oldStatus, newStatus) {
-        return this.logAction(
-            'complaint.status_changed',
-            userId,
-            userName,
-            complaintId,
-            'complaint',
-            { before: { status: oldStatus }, after: { status: newStatus } }
-        );
-    }
-
-    async logUserCreated(userId, userName, newUserId, newUserData) {
-        return this.logAction(
-            'user.created',
-            userId,
-            userName,
-            newUserId,
-            'user',
-            { userData: new UserData }
-        );
-    }
-
-    async logUserDeleted(userId, userName, deletedUserId, deletedUserName) {
-        return this.logAction(
-            'user.deleted',
-            userId,
-            userName,
-            deletedUserId,
-            'user',
-            { deletedUserName }
-        );
-    }
-
-    async logSocietyModified(userId, userName, societyId, changes) {
-        return this.logAction(
-            'society.modified',
-            userId,
-            userName,
-            societyId,
-            'society',
-            changes
-        );
     }
 }
 

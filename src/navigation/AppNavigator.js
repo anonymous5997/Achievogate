@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useEffect, useState } from 'react';
+import { ActivityIndicator, Text, View } from 'react-native';
 import useAuth from '../hooks/useAuth';
 import theme from '../theme/theme';
 
@@ -12,12 +13,10 @@ import BuildingSelectionScreen from '../screens/onboarding/BuildingSelectionScre
 import CitySelectionScreen from '../screens/onboarding/CitySelectionScreen';
 import CountrySelectionScreen from '../screens/onboarding/CountrySelectionScreen';
 import GetStartedScreen from '../screens/onboarding/GetStartedScreen';
-import OnboardingCarouselScreen from '../screens/onboarding/OnboardingCarouselScreen';
 import OTPVerificationScreen from '../screens/onboarding/OTPVerificationScreen';
 import UserDetailsScreen from '../screens/onboarding/UserDetailsScreen';
 
 // Auth
-import LoginScreen from '../screens/auth/LoginScreen';
 import RoleSelectionScreen from '../screens/auth/RoleSelectionScreen';
 
 // Guard
@@ -52,11 +51,18 @@ import AdminDashboard from '../screens/admin/AdminDashboard';
 import AllVisitors from '../screens/admin/AllVisitors';
 import AnalyticsDashboard from '../screens/admin/AnalyticsDashboard';
 import ComplaintManagement from '../screens/admin/ComplaintManagement';
+import DataManagementScreen from '../screens/admin/DataManagementScreen';
+import GuardDetailScreen from '../screens/admin/GuardDetailScreen'; // Import
+import GuardListScreen from '../screens/admin/GuardListScreen'; // Import
+import GuardRosterScreen from '../screens/admin/GuardRosterScreen'; // Import
+import NoticeBoardScreen from '../screens/admin/NoticeBoardScreen';
+import ParcelManagementScreen from '../screens/admin/ParcelManagementScreen';
 import PaymentManagementScreen from '../screens/admin/PaymentManagementScreen';
+import ResidentDetailScreen from '../screens/admin/ResidentDetailScreen';
+import ResidentListScreen from '../screens/admin/ResidentListScreen';
 import SocietyManagement from '../screens/admin/SocietyManagement';
 import UserManagement from '../screens/admin/UserManagement';
 import VehicleManagementScreen from '../screens/admin/VehicleManagementScreen';
-
 // Shared
 import EmergencyScreen from '../screens/shared/EmergencyScreen';
 import ViewNoticesScreen from '../screens/shared/ViewNoticesScreen';
@@ -65,7 +71,17 @@ import VisitorPassScreen from '../screens/shared/VisitorPassScreen';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// Resident Tab Navigator
+// Loading Screen Component
+const LoadingScreen = ({ message }) => (
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0F0F1A' }}>
+        <ActivityIndicator size="large" color="#ffffff" />
+        <Text style={{ marginTop: 20, color: '#ffffff', fontSize: 16 }}>{message}</Text>
+    </View>
+);
+
+
+
+// Resident Tab Navigator ... (same) ...
 const ResidentTabs = () => {
     return (
         <Tab.Navigator
@@ -73,17 +89,10 @@ const ResidentTabs = () => {
                 headerShown: false,
                 tabBarIcon: ({ focused, color, size }) => {
                     let iconName;
-
-                    if (route.name === 'Home') {
-                        iconName = focused ? 'home' : 'home-outline';
-                    } else if (route.name === 'Visitors') {
-                        iconName = focused ? 'people' : 'people-outline';
-                    } else if (route.name === 'Payments') {
-                        iconName = focused ? 'cash' : 'cash-outline';
-                    } else if (route.name === 'Account') {
-                        iconName = focused ? 'person' : 'person-outline';
-                    }
-
+                    if (route.name === 'Home') iconName = focused ? 'home' : 'home-outline';
+                    else if (route.name === 'Visitors') iconName = focused ? 'people' : 'people-outline';
+                    else if (route.name === 'Payments') iconName = focused ? 'cash' : 'cash-outline';
+                    else if (route.name === 'Account') iconName = focused ? 'person' : 'person-outline';
                     return <Ionicons name={iconName} size={size} color={color} />;
                 },
                 tabBarActiveTintColor: theme.colors.primary,
@@ -98,62 +107,95 @@ const ResidentTabs = () => {
             })}
         >
             <Tab.Screen name="Home" component={ResidentDashboard} />
-            <Tab.Screen
-                name="Visitors"
-                component={InviteVisitorScreen}
-                options={{ tabBarBadge: null }} // Can add badge count here
-            />
+            <Tab.Screen name="Visitors" component={InviteVisitorScreen} options={{ tabBarBadge: null }} />
             <Tab.Screen name="Payments" component={PaymentsScreen} />
             <Tab.Screen name="Account" component={ProfileScreen} />
         </Tab.Navigator>
     );
 };
 
+import CinematicIntro from '../screens/CinematicIntro';
+
+// ... imports
+
 const AppNavigator = () => {
     const { user, userProfile, loading } = useAuth();
     const [onboardingComplete, setOnboardingComplete] = useState(null);
+    const [introComplete, setIntroComplete] = useState(false);
+
+    // Explicit Logging for Navigation Logic
+    useEffect(() => {
+        console.log(`[AppNavigator] State Update -> Loading: ${loading}, Onboarding: ${onboardingComplete}, User: ${!!user}, Role: ${userProfile?.role}`);
+    }, [loading, onboardingComplete, user, userProfile]);
 
     useEffect(() => {
         checkOnboarding();
     }, []);
 
     const checkOnboarding = async () => {
-        const completed = await AsyncStorage.getItem('onboardingCompleted');
-        setOnboardingComplete(completed === 'true');
+        try {
+            const completed = await AsyncStorage.getItem('onboardingCompleted');
+            setOnboardingComplete(completed === 'true');
+        } catch (e) {
+            console.error('[AppNavigator] Onboarding check failed', e);
+            setOnboardingComplete(false); // Fallback
+        }
     };
 
-    // Show loading while checking onboarding status
-    if (onboardingComplete === null) {
-        return null; // Or a loading screen
+    // 0. Cinematic Intro (Splash)
+    if (!introComplete) {
+        return <CinematicIntro onComplete={() => setIntroComplete(true)} />;
     }
 
-    if (loading) return null;
+    // 1. Loading State - Fallback Screen
+    if (loading) {
+        return <LoadingScreen message="Verifying Authentication..." />;
+    }
+    if (onboardingComplete === null) {
+        return <LoadingScreen message="Checking App Status..." />;
+    }
 
-    if (!user || !userProfile) {
+    // 2. Auth Flow - Not Logged In
+    if (!user) {
+        console.log('[AppNavigator] Rendering Auth/Onboarding Stack');
         return (
-            <Stack.Navigator screenOptions={{ headerShown: false }}>
-                {!onboardingComplete ? (
-                    // Onboarding Flow
-                    <>
-                        <Stack.Screen name="OnboardingCarousel" component={OnboardingCarouselScreen} />
-                        <Stack.Screen name="GetStartedScreen" component={GetStartedScreen} />
-                        <Stack.Screen name="UserDetailsScreen" component={UserDetailsScreen} />
-                        <Stack.Screen name="OTPVerificationScreen" component={OTPVerificationScreen} />
-                        <Stack.Screen name="CountrySelectionScreen" component={CountrySelectionScreen} />
-                        <Stack.Screen name="CitySelectionScreen" component={CitySelectionScreen} />
-                        <Stack.Screen name="AddHomeScreen" component={AddHomeScreen} />
-                        <Stack.Screen name="BuildingSelectionScreen" component={BuildingSelectionScreen} />
-                    </>
-                ) : (
-                    // Auth Flow
-                    <>
-                        <Stack.Screen name="Login" component={LoginScreen} />
-                        <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
-                    </>
-                )}
-            </Stack.Navigator>
+            <>
+                <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+                    {!onboardingComplete ? (
+                        <>
+                            <Stack.Screen name="OnboardingCarousel" component={NeoOnboarding} />
+                            <Stack.Screen name="GetStartedScreen" component={GetStartedScreen} />
+                            <Stack.Screen name="UserDetailsScreen" component={UserDetailsScreen} />
+                            <Stack.Screen name="OTPVerificationScreen" component={OTPVerificationScreen} />
+                            <Stack.Screen name="CountrySelectionScreen" component={CountrySelectionScreen} />
+                            <Stack.Screen name="CitySelectionScreen" component={CitySelectionScreen} />
+                            <Stack.Screen name="AddHomeScreen" component={AddHomeScreen} />
+                            <Stack.Screen name="BuildingSelectionScreen" component={BuildingSelectionScreen} />
+                        </>
+                    ) : (
+                        <>
+                            <Stack.Screen name="Login" component={CinematicLoginScreen} />
+                            <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
+                        </>
+                    )}
+                </Stack.Navigator>
+            </>
         );
     }
+
+    // 3. User Logged In but No Profile (Edge Case)
+    if (user && !userProfile) {
+        console.log('[AppNavigator] User logged in but missing profile');
+        return (
+            <>
+
+                <LoadingScreen message="Fetching User Profile..." />
+            </>
+        );
+    }
+
+    // 4. Role Based Navigation
+    console.log(`[AppNavigator] Rendering Main Stack for Role: ${userProfile.role}`);
 
     const renderRoleBasedStack = () => {
         switch (userProfile.role) {
@@ -201,29 +243,37 @@ const AppNavigator = () => {
                         <Stack.Screen name="AdminDashboard" component={AdminDashboard} />
                         <Stack.Screen name="AllVisitors" component={AllVisitors} />
                         <Stack.Screen name="UserManagement" component={UserManagement} />
+                        <Stack.Screen name="ResidentListScreen" component={ResidentListScreen} />
+                        <Stack.Screen name="ResidentDetailScreen" component={ResidentDetailScreen} />
                         <Stack.Screen name="SocietyManagement" component={SocietyManagement} />
                         <Stack.Screen name="ComplaintManagement" component={ComplaintManagement} />
                         <Stack.Screen name="AnalyticsDashboard" component={AnalyticsDashboard} />
                         <Stack.Screen name="VehicleManagementScreen" component={VehicleManagementScreen} />
+                        <Stack.Screen name="ParcelManagementScreen" component={ParcelManagementScreen} />
+                        <Stack.Screen name="NoticeBoardScreen" component={NoticeBoardScreen} />
                         <Stack.Screen name="PaymentManagementScreen" component={PaymentManagementScreen} />
                         <Stack.Screen name="ViewNoticesScreen" component={ViewNoticesScreen} />
+                        <Stack.Screen name="DataManagementScreen" component={DataManagementScreen} />
+                        <Stack.Screen name="GuardListScreen" component={GuardListScreen} />
+                        <Stack.Screen name="GuardDetailScreen" component={GuardDetailScreen} />
+                        <Stack.Screen name="GuardRosterScreen" component={GuardRosterScreen} />
                         <Stack.Screen name="EmergencyScreen" component={EmergencyScreen} />
                     </>
                 );
 
             default:
                 return (
-                    <>
-                        <Stack.Screen name="ResidentTabs" component={ResidentTabs} />
-                    </>
+                    <Stack.Screen name="ResidentTabs" component={ResidentTabs} />
                 );
         }
     };
 
     return (
-        <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-            {renderRoleBasedStack()}
-        </Stack.Navigator>
+        <>
+            <Stack.Navigator screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+                {renderRoleBasedStack()}
+            </Stack.Navigator>
+        </>
     );
 };
 

@@ -294,7 +294,7 @@ class AuthService {
             const userSnap = await getDoc(userRef);
 
             if (userSnap.exists()) {
-                return userSnap.data();
+                return { id: userSnap.id, ...userSnap.data() };
             } else {
                 // Create default user profile if doesn't exist
                 const defaultProfile = {

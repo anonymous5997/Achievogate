@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
+import Animated from 'react-native-reanimated';
 import AnimatedCard3D from '../../components/AnimatedCard3D';
 import CinematicBackground from '../../components/CinematicBackground';
 import CinematicHeader from '../../components/CinematicHeader';
@@ -89,6 +90,21 @@ const VisitorPassScreen = ({ route, navigation }) => {
                 leftIcon="arrow-back"
                 onLeftPress={() => navigation.goBack()}
             />
+
+            <View style={{ alignItems: 'center', marginTop: 10, marginBottom: 20 }}>
+                <Animated.View
+                    style={styles.avatar}
+                    sharedTransitionTag={`visitor-avatar-${invite?.id}`}
+                >
+                    <Text style={styles.avatarText}>{invite?.visitorName?.[0] || 'V'}</Text>
+                </Animated.View>
+                <Animated.Text
+                    style={styles.visitorName}
+                    entering={Animated.FadeInDown.delay(300)}
+                >
+                    {invite?.visitorName}
+                </Animated.Text>
+            </View>
 
             <ScrollView style={styles.content}>
                 {/* QR Code Card */}
@@ -210,6 +226,14 @@ const VisitorPassScreen = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
+    avatar: {
+        width: 80, height: 80, borderRadius: 40,
+        backgroundColor: '#EEF2FF',
+        alignItems: 'center', justifyContent: 'center',
+        marginBottom: 8,
+    },
+    avatarText: { fontSize: 32, color: theme.colors.primary, fontWeight: '700' },
+    visitorName: { fontSize: 24, fontWeight: 'bold', color: theme.colors.text.primary, marginBottom: 4 },
     container: {
         flex: 1,
         backgroundColor: theme.colors.background,

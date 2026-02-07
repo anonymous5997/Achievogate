@@ -2,92 +2,107 @@ import { Dimensions } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
-// Cinematic Pastel-Glass Design System
-// High Whitespace + Deep Pastel Gradients
+// Cinematic Dark Luxury Design System
+// Midnight Blue + Neon Glows + Glassmorphism
 
 export const theme = {
     colors: {
-        mode: 'light',
+        mode: 'dark',
 
         // Backgrounds
         background: {
-            screen: '#F8FAFC', // Slate 50
-            card: 'rgba(255, 255, 255, 0.7)',
-            glass: 'rgba(255, 255, 255, 0.4)',
-            overlay: 'rgba(255, 255, 255, 0.9)',
+            screen: '#0F172A', // Midnight Blue Base
+            card: 'rgba(30, 41, 59, 0.7)', // Slate 800 with opacity
+            glass: 'rgba(15, 23, 42, 0.6)', // Deep Blue Glass
+            overlay: 'rgba(2, 6, 23, 0.85)', // Obsidian Overlay
+            modal: '#1E293B',
         },
 
         // Brand Gradients (Start -> End)
         gradients: {
-            primary: ['#6366F1', '#8B5CF6', '#3B82F6'], // Indigo -> Violet -> Blue
-            secondary: ['#A78BFA', '#22D3EE', '#7DD3FC'], // Lavender -> Cyan -> Sky
-            accent: ['#F472B6', '#FBBF24', '#F87171'], // Pink -> Peach -> Red
+            primary: ['#6366F1', '#8B5CF6', '#D946EF'], // Indigo -> Violet -> Fuchsia (Neon)
+            secondary: ['#0EA5E9', '#22D3EE', '#A7F3D0'], // Sky -> Cyan -> Teal (Cyber)
+            accent: ['#F59E0B', '#F97316', '#EF4444'], // Amber -> Orange -> Red (Heat)
 
-            success: ['#34D399', '#10B981'], // Emerald -> Teal
-            danger: ['#F87171', '#EF4444'], // Rose -> Red
-            warning: ['#FBBF24', '#F59E0B'], // Amber -> Orange
+            dark: ['#0F172A', '#1E293B'],
+            glass: ['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.01)'],
 
-            header: ['rgba(255,255,255,0.95)', 'rgba(255,255,255,0.8)'],
+            success: ['#10B981', '#34D399'],
+            danger: ['#EF4444', '#F87171'],
+            warning: ['#F59E0B', '#FBBF24'],
         },
 
-        // Solid Colors
-        primary: '#6366F1', // Indigo 500
-        secondary: '#06B6D4', // Cyan 500
-        accent: '#EC4899', // Pink 500
+        // Solid Colors (Neon Vibrancy)
+        primary: '#8B5CF6', // Violet
+        secondary: '#22D3EE', // Cyan
+        accent: '#F472B6', // Pink
 
-        // Glow Colors (for light mode shadows)
+        // Glow Colors (Shadows/Bloom)
         glow: {
-            primary: '#818CF8', // Indigo 400
-            secondary: '#67E8F9', // Cyan 300
-            accent: '#F9A8D4', // Pink 300
+            primary: '#8B5CF6',
+            secondary: '#22D3EE',
+            accent: '#F472B6',
+            success: '#10B981',
+            danger: '#EF4444',
+            white: '#FFFFFF',
         },
 
         // Text
         text: {
-            primary: '#1E293B', // Slate 800
-            secondary: '#475569', // Slate 600
-            muted: '#94A3B8', // Slate 400
-            inverse: '#FFFFFF',
+            primary: '#F8FAFC', // Slate 50
+            secondary: '#94A3B8', // Slate 400
+            muted: '#64748B', // Slate 500
+            inverse: '#0F172A', // Dark
+            highlight: '#E2E8F0',
         },
 
         status: {
-            pending: '#F59E0B',
-            approved: '#10B981',
-            denied: '#EF4444',
-            active: '#3B82F6',
+            pending: '#F59E0B',  // Amber
+            approved: '#10B981', // Emerald
+            denied: '#EF4444',   // Red
+            active: '#3B82F6',   // Blue
+            offline: '#64748B',  // Slate
         },
+
+        border: 'rgba(255, 255, 255, 0.1)',
     },
 
     layout: {
         width,
         height,
-        cardRadius: 24,
-        buttonRadius: 20,
+        cardRadius: 20,
+        buttonRadius: 16,
+        inputRadius: 12,
         sectionGap: 24,
 
-        // Cinematic Light Shadows
+        // Cinematic Dark Shadows/Glows
         shadows: {
             glow: {
-                shadowColor: '#6366F1',
-                shadowOffset: { width: 0, height: 8 },
-                shadowOpacity: 0.25,
+                shadowColor: '#8B5CF6',
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.6,
                 shadowRadius: 16,
-                elevation: 8,
+                elevation: 10,
             },
             card: {
-                shadowColor: '#94A3B8',
-                shadowOffset: { width: 0, height: 8 },
-                shadowOpacity: 0.1,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: 0.5,
                 shadowRadius: 20,
-                elevation: 4,
+                elevation: 8,
             },
             float: {
-                shadowColor: '#6366F1',
-                shadowOffset: { width: 0, height: 12 },
-                shadowOpacity: 0.2,
+                shadowColor: '#22D3EE',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.4,
                 shadowRadius: 24,
                 elevation: 12,
             },
+            text: {
+                textShadowColor: 'rgba(139, 92, 246, 0.5)',
+                textShadowOffset: { width: 0, height: 0 },
+                textShadowRadius: 8,
+            }
         },
     },
 
@@ -96,49 +111,61 @@ export const theme = {
         sm: 8,
         md: 12,
         lg: 16,
-        xl: 24,
+        xl: 20,
         xxl: 32,
         xxxl: 48,
-        container: 24,
+        container: 20,
         headerHeight: 70,
     },
 
     typography: {
-        // Clean Education Style
+        // Modern Geometric Sans
         h1: {
             fontSize: 32,
             fontWeight: '800',
             lineHeight: 40,
-            color: '#1E293B',
+            color: '#F8FAFC',
             letterSpacing: -0.5,
         },
         h2: {
             fontSize: 24,
             fontWeight: '700',
             lineHeight: 32,
-            color: '#334155',
+            color: '#F1F5F9',
             letterSpacing: -0.5,
         },
         h3: {
             fontSize: 18,
             fontWeight: '600',
             lineHeight: 26,
-            color: '#475569',
+            color: '#E2E8F0',
         },
         body1: {
             fontSize: 16,
             fontWeight: '400',
             lineHeight: 24,
-            color: '#475569',
+            color: '#CBD5E1',
+        },
+        body2: {
+            fontSize: 14,
+            fontWeight: '400',
+            lineHeight: 20,
+            color: '#94A3B8',
         },
         caption: {
             fontSize: 12,
             fontWeight: '600',
             lineHeight: 16,
-            color: '#94A3B8',
-            letterSpacing: 0.5,
+            color: '#64748B',
+            letterSpacing: 1,
             textTransform: 'uppercase',
         },
+        label: {
+            fontSize: 14,
+            fontWeight: '600',
+            color: '#94A3B8',
+            letterSpacing: 0.5,
+        }
     },
 };
 

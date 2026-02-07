@@ -5,11 +5,14 @@ import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { AuthProvider } from './src/context/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import SplashIntroScreen from './src/screens/SplashIntroScreen';
 
 export default function App() {
     const [showIntro, setShowIntro] = useState(true);
+
+    console.log('App: Rendering. showIntro:', showIntro);
 
     if (showIntro) {
         return (
@@ -20,10 +23,12 @@ export default function App() {
     return (
         <SafeAreaProvider>
             <GestureHandlerRootView style={{ flex: 1 }}>
-                <NavigationContainer>
-                    <StatusBar style="light" />
-                    <AppNavigator />
-                </NavigationContainer>
+                <AuthProvider>
+                    <NavigationContainer>
+                        <StatusBar style="light" />
+                        <AppNavigator />
+                    </NavigationContainer>
+                </AuthProvider>
             </GestureHandlerRootView>
         </SafeAreaProvider>
     );

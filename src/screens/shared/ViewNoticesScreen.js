@@ -1,20 +1,48 @@
 import { Ionicons } from '@expo/vector-icons';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useState } from 'react';
+import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import AnimatedCard3D from '../../components/AnimatedCard3D';
 import AnimatedScreenWrapper from '../../components/AnimatedScreenWrapper';
 import CinematicBackground from '../../components/CinematicBackground';
 import CinematicHeader from '../../components/CinematicHeader';
 import useAuth from '../../hooks/useAuth';
-import useNotices from '../../hooks/useNotices';
+import noticeService from '../../services/noticeService';
 import theme from '../../theme/theme';
 
 const ViewNoticesScreen = ({ navigation }) => {
     const { userProfile } = useAuth();
-    const { notices, loading } = useNotices();
+    const [notices, setNotices] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    const formatDate = (date) => {
-        if (!date) return '';
-        const d = new Date(date);
+    useFocusEffect(
+        useCallback(() => {
+            loadNotices();
+        }, [userProfile?.societyId])
+    );
+
+    const loadNotices = async () => {
+        if (!userProfile?.societyId) return;
+        setLoading(true);
+        // Assuming userProfile has 'role' and 'block' (derived from flatNumber e.g., 'A' from 'A-101')
+        const block = userProfile.flatNumber ? userProfile.flatNumber.split('-')[0] : null; // Simple heuristic
+
+        const res = await noticeService.getNotices(
+            userProfile.societyId,
+            userProfile.role,
+            block
+        );
+
+        if (res.success) {
+            setNotices(res.notices);
+        }
+        setLoading(false);
+    };
+
+    const formatDate = (timestamp) => {
+        if (!timestamp) return '';
+        // Handle Firestore Timestamp or Date object
+        const d = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     };
 
@@ -31,27 +59,29 @@ const ViewNoticesScreen = ({ navigation }) => {
                     data={notices}
                     keyExtractor={item => item.id}
                     contentContainerStyle={styles.list}
+                    refreshControl={
+                        <RefreshControl refreshing={loading} onRefresh={loadNotices} tintColor={theme.colors.primary} />
+                    }
                     renderItem={({ item, index }) => (
                         <AnimatedCard3D index={index} delay={index * 50} style={styles.card}>
                             <View style={styles.noticeHeader}>
                                 <View style={[
                                     styles.iconContainer,
-                                    { backgroundColor: item.priority === 'high' ? '#FEE2E2' : '#EEF2FF' }
+                                    { backgroundColor: item.targetRole === 'all' ? '#EEF2FF' : '#FEF3C7' }
                                 ]}>
                                     <Ionicons
-                                        name={item.icon || 'megaphone'}
+                                        name={item.targetRole === 'all' ? 'megaphone' : 'people'}
                                         size={24}
-                                        color={item.priority === 'high' ? theme.colors.status.denied : theme.colors.primary}
+                                        color={item.targetRole === 'all' ? theme.colors.primary : theme.colors.status.warning}
                                     />
                                 </View>
                                 <View style={styles.headerInfo}>
                                     <Text style={styles.noticeTitle}>{item.title}</Text>
-                                    <Text style={styles.noticeDate}>{formatDate(item.date)}</Text>
+                                    <Text style={styles.noticeDate}>{formatDate(item.createdAt)}</Text>
                                 </View>
-                                {item.priority === 'high' && (
+                                {item.targetRole !== 'all' && (
                                     <View style={styles.priorityBadge}>
-                                        <View style={styles.pulse} />
-                                        <Text style={styles.priorityText}>HIGH</Text>
+                                        <Text style={styles.priorityText}>{item.targetRole.toUpperCase()}</Text>
                                     </View>
                                 )}
                             </View>
@@ -59,13 +89,15 @@ const ViewNoticesScreen = ({ navigation }) => {
                         </AnimatedCard3D>
                     )}
                     ListEmptyComponent={
-                        <AnimatedCard3D>
-                            <View style={styles.emptyState}>
-                                <Ionicons name="megaphone-outline" size={64} color={theme.colors.text.muted} />
-                                <Text style={styles.emptyTitle}>No Notices</Text>
-                                <Text style={styles.emptySubtitle}>No announcements at this time</Text>
-                            </View>
-                        </AnimatedCard3D>
+                        !loading && (
+                            <AnimatedCard3D>
+                                <View style={styles.emptyState}>
+                                    <Ionicons name="megaphone-outline" size={64} color={theme.colors.text.muted} />
+                                    <Text style={styles.emptyTitle}>No Notices</Text>
+                                    <Text style={styles.emptySubtitle}>No announcements for you at this time</Text>
+                                </View>
+                            </AnimatedCard3D>
+                        )
                     }
                 />
             </AnimatedScreenWrapper>
@@ -111,24 +143,15 @@ const styles = StyleSheet.create({
         color: theme.colors.text.muted,
     },
     priorityBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FEE2E2',
+        backgroundColor: '#FEF3C7',
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 6,
     },
-    pulse: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: theme.colors.status.denied,
-        marginRight: 6,
-    },
     priorityText: {
         fontSize: 10,
         fontWeight: '700',
-        color: theme.colors.status.denied,
+        color: theme.colors.status.warning,
     },
     noticeContent: {
         ...theme.typography.body1,

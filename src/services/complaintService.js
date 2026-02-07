@@ -1,11 +1,9 @@
 import {
     addDoc,
     collection,
-    deleteDoc,
     doc,
     getDoc,
     getDocs,
-    onSnapshot,
     orderBy,
     query,
     serverTimestamp,
@@ -15,280 +13,149 @@ import {
 import { db } from '../../firebaseConfig';
 
 /**
- * Complaint Service - Manages complaints from all users
+ * Complaint Service - Enterprise SLA & Workflow
  */
 
 class ComplaintService {
+
     /**
-     * Create a new complaint
+     * File a new complaint
      */
-    async createComplaint(complaintData) {
+    async fileComplaint(complaintData) {
         try {
-            const data = {
-                title: complaintData.title,
-                description: complaintData.description,
-                category: complaintData.category, // 'maintenance', 'security', 'noise', 'cleanliness', 'other'
-                priority: complaintData.priority || 'medium', // 'low', 'medium', 'high'
-                status: 'pending', // 'pending', 'in-progress', 'resolved', 'closed'
-                createdBy: complaintData.createdBy, // userId
-                createdByRole: complaintData.createdByRole, // 'resident', 'guard', 'admin'
-                societyId: complaintData.societyId,
-                flatNumber: complaintData.flatNumber || '',
-                againstUser: complaintData.againstUser || null, // optional
-                assignedTo: complaintData.assignedTo || null, // optional
-                photos: complaintData.photos || [],
-                comments: [],
+            const { societyId, flatNumber, userId, category, description, priority } = complaintData;
+
+            // Calculate SLA Target Date based on Priority (Case insensitive)
+            const p = priority?.toLowerCase();
+            let slaHours = 72; // Default Low
+            if (p === 'medium') slaHours = 48;
+            if (p === 'high') slaHours = 24;
+            if (p === 'critical' || p === 'urgent') slaHours = 6;
+
+            const slaTarget = new Date();
+            slaTarget.setHours(slaTarget.getHours() + slaHours);
+
+            const newComplaint = {
+                societyId,
+                flatNumber,
+                userId,
+                category,
+                description,
+                priority,
+                status: 'open', // open, in_progress, resolved, escalated
+                slaTargetTime: slaTarget,
+                isBreached: false,
+                escalationLevel: 0,
                 createdAt: serverTimestamp(),
-                resolvedAt: null,
+                history: [
+                    { action: 'CREATED', by: userId, timestamp: new Date(), note: 'Complaint filed' }
+                ]
             };
 
-            const docRef = await addDoc(collection(db, 'complaints'), complaintData);
-
-            // Send notification to admin
-            const notificationService = (await import('./notificationService')).default;
-            const notification = notificationService.complaintFiled(
-                complaintData.category,
-                complaintData.priority
-            );
-            await notificationService.sendLocalNotification(
-                notification.title,
-                notification.body,
-                notification.data
-            );
-
+            const docRef = await addDoc(collection(db, 'complaints'), newComplaint);
             return { success: true, id: docRef.id };
         } catch (error) {
-            console.error('Error creating complaint:', error);
+            console.error('Error filing complaint:', error);
             return { success: false, error: error.message };
         }
     }
 
     /**
-     * Get complaints with filters
+     * Get Complaints for Resident
      */
-    async getComplaints(filters = {}) {
+    async getMyComplaints(userId) {
         try {
-            let q = query(collection(db, 'complaints'));
-
-            if (filters.status) {
-                q = query(q, where('status', '==', filters.status));
-            }
-
-            if (filters.societyId) {
-                q = query(q, where('societyId', '==', filters.societyId));
-            }
-
-            if (filters.createdBy) {
-                q = query(q, where('createdBy', '==', filters.createdBy));
-            }
-
-            if (filters.assignedTo) {
-                q = query(q, where('assignedTo', '==', filters.assignedTo));
-            }
-
-            if (filters.category) {
-                q = query(q, where('category', '==', filters.category));
-            }
-
-            q = query(q, orderBy('createdAt', 'desc'));
-
+            const q = query(
+                collection(db, 'complaints'),
+                where('userId', '==', userId),
+                orderBy('createdAt', 'desc')
+            );
             const snapshot = await getDocs(q);
             const complaints = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
-                createdAt: doc.data().createdAt?.toDate(),
-                resolvedAt: doc.data().resolvedAt?.toDate(),
+                createdAt: doc.data().createdAt?.toDate() || new Date(),
+                slaTargetTime: doc.data().slaTargetTime?.toDate() || new Date()
             }));
+            return { success: true, complaints };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * Get All Complaints (Admin)
+     */
+    async getAllComplaints(societyId, statusFilter = 'all') {
+        try {
+            // Base Query
+            let q = query(
+                collection(db, 'complaints'),
+                where('societyId', '==', societyId),
+                orderBy('createdAt', 'desc')
+            );
+
+            // Fetch all and filter in memory if index is missing for complex queries
+            // Ideally we should have compound indexes.
+            const snapshot = await getDocs(q);
+            let complaints = snapshot.docs.map(doc => {
+                const data = doc.data();
+                const createdAt = data.createdAt?.toDate() || new Date();
+                const slaTargetTime = data.slaTargetTime?.toDate() || new Date();
+                const isBreached = data.status !== 'resolved' && new Date() > slaTargetTime;
+
+                return {
+                    id: doc.id,
+                    ...data,
+                    createdAt,
+                    slaTargetTime,
+                    isBreached
+                };
+            });
+
+            if (statusFilter !== 'all') {
+                complaints = complaints.filter(c => c.status === statusFilter);
+            }
 
             return { success: true, complaints };
         } catch (error) {
-            console.error('Error fetching complaints:', error);
-            return { success: false, error: error.message, complaints: [] };
-        }
-    }
-
-    /**
-     * Get a single complaint by ID
-     */
-    async getComplaint(complaintId) {
-        try {
-            const docRef = doc(db, 'complaints', complaintId);
-            const docSnap = await getDoc(docRef);
-
-            if (docSnap.exists()) {
-                return {
-                    success: true,
-                    complaint: {
-                        id: docSnap.id,
-                        ...docSnap.data(),
-                        createdAt: docSnap.data().createdAt?.toDate(),
-                        resolvedAt: docSnap.data().resolvedAt?.toDate(),
-                    },
-                };
-            } else {
-                return { success: false, error: 'Complaint not found' };
-            }
-        } catch (error) {
-            console.error('Error fetching complaint:', error);
+            console.error(error);
             return { success: false, error: error.message };
         }
     }
 
     /**
-     * Update complaint status
+     * Update Status (Admin)
      */
-    async updateComplaintStatus(complaintId, status, userId, userName) {
+    async updateStatus(complaintId, newStatus, adminId, note = '') {
         try {
-            // Get current complaint to track changes
-            const complaintRef = doc(db, 'complaints', complaintId);
-            const complaintSnap = await getDoc(complaintRef);
-            const oldStatus = complaintSnap.data()?.status;
+            const ref = doc(db, 'complaints', complaintId);
+            const snap = await getDoc(ref);
+            if (!snap.exists()) return { success: false, error: 'Not found' };
 
-            const updates = {
-                status: status,
+            const prevHistory = snap.data().history || [];
+
+            await updateDoc(ref, {
+                status: newStatus,
                 updatedAt: serverTimestamp(),
-            };
-
-            if (status === 'resolved' || status === 'closed') {
-                updates.resolvedAt = serverTimestamp();
-            }
-
-            await updateDoc(complaintRef, updates);
-
-            // Audit log
-            const auditService = (await import('./auditService')).default;
-            await auditService.logComplaintStatusChange(
-                userId,
-                userName,
-                complaintId,
-                oldStatus,
-                status
-            );
-
-            return { success: true };
-        } catch (error) {
-            console.error('Error updating complaint status:', error);
-            return { success: false, error: error.message };
-        }
-    }
-
-    /**
-     * Assign complaint to user
-     */
-    async assignComplaint(complaintId, assignedTo) {
-        try {
-            const complaintRef = doc(db, 'complaints', complaintId);
-            await updateDoc(complaintRef, {
-                assignedTo: assignedTo,
-                status: 'in-progress',
-                updatedAt: serverTimestamp(),
+                history: [
+                    ...prevHistory,
+                    { action: `STATUS_CHANGE_TO_${newStatus.toUpperCase()}`, by: adminId, timestamp: new Date(), note }
+                ]
             });
-
             return { success: true };
         } catch (error) {
-            console.error('Error assigning complaint:', error);
             return { success: false, error: error.message };
         }
     }
 
     /**
-     * Add comment to complaint
+     * Check for SLA Breaches (Cloud Function Candidate - but implementing client-side check for UI)
      */
-    async addComment(complaintId, comment, userId, userName) {
-        try {
-            const complaintRef = doc(db, 'complaints', complaintId);
-            const complaintSnap = await getDoc(complaintRef);
-
-            if (complaintSnap.exists()) {
-                const currentComments = complaintSnap.data().comments || [];
-                const newComment = {
-                    text: comment,
-                    userId: userId,
-                    userName: userName,
-                    timestamp: new Date(),
-                };
-
-                await updateDoc(complaintRef, {
-                    comments: [...currentComments, newComment],
-                    updatedAt: serverTimestamp(),
-                });
-
-                return { success: true };
-            } else {
-                return { success: false, error: 'Complaint not found' };
-            }
-        } catch (error) {
-            console.error('Error adding comment:', error);
-            return { success: false, error: error.message };
-        }
-    }
-
-    /**
-     * Delete complaint
-     */
-    async deleteComplaint(complaintId) {
-        try {
-            const complaintRef = doc(db, 'complaints', complaintId);
-            await deleteDoc(complaintRef);
-            return { success: true };
-        } catch (error) {
-            console.error('Error deleting complaint:', error);
-            return { success: false, error: error.message };
-        }
-    }
-
-    /**
-     * Subscribe to complaints (real-time)
-     */
-    subscribeToComplaints(filters = {}, callback) {
-        let q = query(collection(db, 'complaints'));
-
-        if (filters.status) {
-            q = query(q, where('status', '==', filters.status));
-        }
-
-        if (filters.societyId) {
-            q = query(q, where('societyId', '==', filters.societyId));
-        }
-
-        if (filters.createdBy) {
-            q = query(q, where('createdBy', '==', filters.createdBy));
-        }
-
-        q = query(q, orderBy('createdAt', 'desc'));
-
-        return onSnapshot(q, (snapshot) => {
-            const complaints = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-                createdAt: doc.data().createdAt?.toDate(),
-                resolvedAt: doc.data().resolvedAt?.toDate(),
-            }));
-            callback(complaints);
-        });
-    }
-
-    /**
-     * Get complaint count by status
-     */
-    async getComplaintCount(filters = {}) {
-        try {
-            let q = query(collection(db, 'complaints'));
-
-            if (filters.status) {
-                q = query(q, where('status', '==', filters.status));
-            }
-
-            if (filters.societyId) {
-                q = query(q, where('societyId', '==', filters.societyId));
-            }
-
-            const snapshot = await getDocs(q);
-            return { success: true, count: snapshot.size };
-        } catch (error) {
-            console.error('Error getting complaint count:', error);
-            return { success: false, count: 0 };
-        }
+    checkSlaBreach(complaint) {
+        const now = new Date();
+        const target = complaint.slaTargetTime;
+        return complaint.status !== 'resolved' && now > target;
     }
 }
 

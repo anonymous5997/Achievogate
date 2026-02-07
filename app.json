@@ -71,6 +71,6 @@
     "experiments": {
       "reactCompiler": true
     },
-    "newArchEnabled": false
+    "newArchEnabled": true
   }
 }

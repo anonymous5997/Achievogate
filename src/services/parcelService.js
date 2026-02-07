@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, getDocs, onSnapshot, orderBy, query, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, doc, getDocs, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
 
 /**
@@ -6,33 +6,73 @@ import { db } from '../../firebaseConfig';
  */
 
 /**
- * Add a new parcel for a resident
+ * Upload parcel image to Firebase Storage
+ */
+export const uploadParcelImage = async (uri) => {
+    if (!uri) return null;
+    try {
+        const manipResult = await manipulateAsync(
+            uri,
+            [{ resize: { width: 800 } }],
+            { compress: 0.7, format: SaveFormat.JPEG }
+        );
+
+        const response = await fetch(manipResult.uri);
+        const blob = await response.blob();
+        const filename = `parcels/${Date.now()}_${Math.random().toString(36).substring(7)}.jpg`;
+        const storageRef = ref(storage, filename);
+        await uploadBytes(storageRef, blob);
+        return await getDownloadURL(storageRef);
+    } catch (error) {
+        console.error('Error uploading parcel image:', error);
+        return null;
+    }
+};
+
+/**
+ * Add a new parcel for a resident (Enterprise)
  */
 export const addParcel = async (flatNumber, details) => {
     try {
+        const { societyId, description, carrier, photoUrl, createdBy } = details;
+
+        // Upload image if it's a local URI (starts with file:// or similar)
+        let finalPhotoUrl = photoUrl;
+        if (photoUrl && !photoUrl.startsWith('http')) {
+            finalPhotoUrl = await uploadParcelImage(photoUrl);
+        }
+
         const parcelData = {
+            societyId: societyId, // Strict Scoping
             flatNumber,
-            description: details.description || 'Package',
-            carrier: details.carrier || 'Unknown',
-            receivedAt: new Date(),
+            description: description || 'Package',
+            carrier: carrier || 'Unknown',
+            photoUrl: finalPhotoUrl || null,
+            status: 'at_gate',
+            entryTime: serverTimestamp(),
             collectedAt: null,
-            status: 'pending',
-            createdBy: details.createdBy || 'Guard',
+            reminderSent: false,
+            createdBy: createdBy || 'Guard',
+            createdAt: serverTimestamp()
         };
 
         const docRef = await addDoc(collection(db, 'parcels'), parcelData);
 
-        // Send notification to resident
-        const notificationService = (await import('./notificationService')).default;
-        const notification = notificationService.parcelLogged(
-            parcelData.flatNumber,
-            parcelData.description
-        );
-        await notificationService.sendLocalNotification(
-            notification.title,
-            notification.body,
-            notification.data
-        );
+        // Enterprise: Write to Notification Queue (Backend Worker Pattern)
+        // This decouples the heavy lifting (finding tokens, retries) from the client.
+        await addDoc(collection(db, 'notificationQueue'), {
+            type: 'PARCEL_ALERT',
+            targetFlat: flatNumber,
+            societyId: societyId,
+            payload: {
+                title: 'Parcel Arrived',
+                body: `A package from ${parcelData.carrier} is at the gate.`,
+                data: { parcelId: docRef.id, photoUrl: photoUrl }
+            },
+            status: 'pending',
+            retryCount: 0,
+            createdAt: serverTimestamp()
+        });
 
         return { success: true, id: docRef.id };
     } catch (error) {
@@ -44,13 +84,27 @@ export const addParcel = async (flatNumber, details) => {
 /**
  * Get parcels for a specific flat
  */
-export const getParcels = async (flatNumber) => {
+/**
+ * Get parcels for a specific flat
+ */
+export const getParcels = async (societyId, flatNumber) => {
     try {
-        const q = query(
+        let q = query(
             collection(db, 'parcels'),
             where('flatNumber', '==', flatNumber),
-            orderBy('receivedAt', 'desc')
+            orderBy('entryTime', 'desc')
         );
+
+        // If societyId provided, ideally we filter by it. 
+        // Requires Composite Index: flatNumber ASC, entryTime DESC (or societyId ASC, flatNumber ASC...)
+        if (societyId) {
+            q = query(
+                collection(db, 'parcels'),
+                where('societyId', '==', societyId),
+                where('flatNumber', '==', flatNumber),
+                orderBy('entryTime', 'desc')
+            );
+        }
 
         const snapshot = await getDocs(q);
         const parcels = snapshot.docs.map(doc => ({
@@ -58,6 +112,7 @@ export const getParcels = async (flatNumber) => {
             ...doc.data(),
             receivedAt: doc.data().receivedAt?.toDate(),
             collectedAt: doc.data().collectedAt?.toDate(),
+            entryTime: doc.data().entryTime?.toDate(),
         }));
 
         return { success: true, parcels };
@@ -124,3 +179,52 @@ export const subscribeToParcels = (flatNumber, callback) => {
         callback(parcels);
     });
 };
+
+/**
+ * Get parcels for the entire Society (Admin Dashboard)
+ */
+export const getParcelsForSociety = async (societyId, filterStatus = 'pending') => {
+    try {
+        let q = query(
+            collection(db, 'parcels'),
+            where('societyId', '==', societyId),
+            orderBy('entryTime', 'desc')
+        );
+
+        if (filterStatus === 'pending') {
+            q = query(
+                collection(db, 'parcels'),
+                where('societyId', '==', societyId),
+                where('status', 'in', ['at_gate', 'pending']), // Handle synonyms
+                orderBy('entryTime', 'desc')
+            );
+        } else if (filterStatus === 'collected') {
+            q = query(
+                collection(db, 'parcels'),
+                where('societyId', '==', societyId),
+                where('status', '==', 'collected'),
+                orderBy('entryTime', 'desc'),
+                limit(50) // Limit collected history
+            );
+        }
+
+        const snapshot = await getDocs(q);
+        const parcels = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            entryTime: doc.data().entryTime?.toDate(),
+            collectedAt: doc.data().collectedAt?.toDate(),
+            createdAt: doc.data().createdAt?.toDate() || doc.data().entryTime?.toDate() // Fallback
+        }));
+
+        return { success: true, parcels };
+    } catch (error) {
+        console.error('Error fetching society parcels:', error);
+        return { success: false, error: error.message, parcels: [] };
+    }
+};
+
+/**
+ * Get parcels for the entire Society (Admin Dashboard)
+ */
+

@@ -40,8 +40,7 @@ const PaymentManagementScreen = ({ navigation }) => {
                 <CinematicHeader
                     title="Payment Management"
                     subtitle="Financial Overview"
-                    leftIcon="arrow-back"
-                    onLeftPress={() => navigation.goBack()}
+                    onBack={() => navigation.goBack()}
                 />
 
                 <View style={styles.content}>

@@ -191,6 +191,64 @@ class SocietyService {
             return { success: false, count: 0 };
         }
     }
+    /**
+     * Get Real-time Dashboard Stats
+     * Aggregates live data for the Admin Dashboard.
+     * Note: In a large-scale system, this should read from the denormalized 'stats' field.
+     * For this MVP/Demo, we query collections directly to match the Seed Data instantly.
+     */
+    async getDashboardStats(societyId) {
+        try {
+            console.log('Fetching Dashboard Stats for:', societyId);
+
+            // 1. Todays Visitors
+            // Note: Ideally use 'checkInTime' > startOfDay. 
+            // For Demo, just count all 'entered' or 'pending'.
+            const visitorsQuery = query(
+                collection(db, 'visitors'),
+                where('societyId', '==', societyId),
+                where('status', 'in', ['pending', 'entered'])
+            );
+
+            // 2. Pending Parcels
+            const parcelsQuery = query(
+                collection(db, 'parcels'),
+                where('societyId', '==', societyId),
+                where('status', '==', 'at_gate')
+            );
+
+            // 3. Open Complaints
+            const complaintsQuery = query(
+                collection(db, 'complaints'),
+                where('societyId', '==', societyId),
+                where('status', 'in', ['open', 'in_progress'])
+            );
+
+            // Execute parallel
+            const [visSnap, parSnap, comSnap] = await Promise.all([
+                getDocs(visitorsQuery),
+                getDocs(parcelsQuery),
+                getDocs(complaintsQuery)
+            ]);
+
+            return {
+                success: true,
+                stats: {
+                    visitors: visSnap.size,
+                    parcels: parSnap.size,
+                    complaints: comSnap.size
+                }
+            };
+
+        } catch (error) {
+            console.error('Error fetching dashboard stats:', error);
+            // Return zeros on error to prevent crash
+            return {
+                success: false,
+                stats: { visitors: 0, parcels: 0, complaints: 0 }
+            };
+        }
+    }
 }
 
 export default new SocietyService();

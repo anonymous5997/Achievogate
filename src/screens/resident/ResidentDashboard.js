@@ -1,12 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect, useState } from 'react';
-import { ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import AnimatedCard3D from '../../components/AnimatedCard3D';
-import AnimatedScreenWrapper from '../../components/AnimatedScreenWrapper';
+import { RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, { FadeInDown, FadeInUp, ZoomIn } from 'react-native-reanimated';
 import CinematicBackground from '../../components/CinematicBackground';
-import CinematicButton from '../../components/CinematicButton';
 import CinematicHeader from '../../components/CinematicHeader';
-import NoticeCard from '../../components/NoticeCard';
+import NeoCard from '../../components/NeoCard';
+import NeonButton from '../../components/NeonButton';
+import SOSButton from '../../components/SOSButton';
+import FloatingOrb from '../../components/motion/FloatingOrb';
+import StatusRing from '../../components/motion/StatusRing';
 import useAuth from '../../hooks/useAuth';
 import useNotices from '../../hooks/useNotices';
 import useParcels from '../../hooks/useParcels';
@@ -14,516 +17,394 @@ import useVisitors from '../../hooks/useVisitors';
 import visitorService from '../../services/visitorService';
 import theme from '../../theme/theme';
 
+const FadeInLeft = (delay) => FadeInUp.delay(delay).springify(); // Helper
+const FadeInRight = (delay) => FadeInUp.delay(delay).springify(); // Helper
+
+const QuickAction = ({ icon, label, onPress, delay, color }) => (
+    <Animated.View entering={ZoomIn.delay(delay).springify()} style={styles.quickActionContainer}>
+        <TouchableOpacity onPress={onPress} style={styles.quickActionBtn}>
+            {/* Floating Effect Background */}
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                <View style={{ opacity: 0.3, transform: [{ scale: 1.2 }] }}>
+                    <FloatingOrb size={56} color={color} duration={2000 + delay} />
+                </View>
+            </View>
+            <LinearGradient
+                colors={[color, color + '80']}
+                style={styles.quickActionGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+            >
+                <Ionicons name={icon} size={24} color="#fff" />
+            </LinearGradient>
+            <Text style={styles.quickActionLabel}>{label}</Text>
+        </TouchableOpacity>
+    </Animated.View>
+);
+
+const SectionHeader = ({ title, action, onAction }) => (
+    <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {action && (
+            <TouchableOpacity onPress={onAction}>
+                <Text style={styles.sectionAction}>{action}</Text>
+            </TouchableOpacity>
+        )}
+    </View>
+);
+
 const ResidentDashboard = ({ navigation }) => {
     const { userProfile, signOut } = useAuth();
     const { visitors, pendingVisitors, approveVisitor, denyVisitor } = useVisitors('resident', userProfile?.flatNumber);
     const { parcels, pendingCount: parcelCount } = useParcels(userProfile?.flatNumber);
     const { notices } = useNotices();
     const [visitorsTodayCount, setVisitorsTodayCount] = useState(0);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        // Add reload logic here if needed
+        setTimeout(() => setRefreshing(false), 1000);
+    };
 
     useEffect(() => {
         if (userProfile?.flatNumber) {
             visitorService.getTodayVisitorCount(userProfile.flatNumber).then(result => {
-                if (result.success) {
-                    setVisitorsTodayCount(result.count);
-                }
+                if (result.success) setVisitorsTodayCount(result.count);
             });
         }
     }, [userProfile, visitors]);
 
-    const formatTime = (date) => {
-        if (!date) return '';
-        const d = new Date(date);
-        const hours = d.getHours();
-        const minutes = d.getMinutes();
-        const ampm = hours >= 12 ? 'PM' : 'AM';
-        const formattedHours = hours % 12 || 12;
-        const formattedMinutes = minutes < 10 ? '0' + minutes : minutes;
-        return `${formattedHours}:${formattedMinutes} ${ampm}`;
-    };
-
     return (
         <CinematicBackground>
-            <StatusBar barStyle="dark-content" />
+            <StatusBar barStyle="light-content" />
 
-            <AnimatedScreenWrapper noPadding>
-                <CinematicHeader
-                    title={`Welcome, ${userProfile?.name?.split(' ')[0]}!`}
-                    subTitle={`Flat ${userProfile?.flatNumber}`}
-                    rightAction={
-                        <TouchableOpacity onPress={signOut} style={styles.logoutBtn}>
-                            <Ionicons name="log-out-outline" size={20} color={theme.colors.text.secondary} />
-                        </TouchableOpacity>
-                    }
-                />
+            <CinematicHeader
+                title="MY HOME"
+                subTitle={`Flat ${userProfile?.flatNumber} • ${userProfile?.societyId}`}
+                rightAction={
+                    <TouchableOpacity onPress={signOut} style={styles.profileBtn}>
+                        <Image source={{ uri: userProfile?.photoUrl || 'https://ui-avatars.com/api/?name=' + userProfile?.name }} style={styles.profileImg} />
+                    </TouchableOpacity>
+                }
+            />
 
-                <ScrollView contentContainerStyle={styles.content}>
+            <ScrollView
+                contentContainerStyle={styles.content}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fff" />}
+                showsVerticalScrollIndicator={false}
+            >
 
-                    {/* Quick Actions Row */}
-                    <View style={styles.quickActionsRow}>
-                        {/* Invite Visitor Card */}
-                        <AnimatedCard3D
-                            index={0}
-                            style={[styles.quickActionCard, { flex: 1, marginRight: 8 }]}
-                            onPress={() => navigation.navigate('InviteVisitor')}
-                        >
-                            <View style={styles.inviteIcon}>
-                                <Ionicons name="person-add" size={28} color={theme.colors.primary} />
-                            </View>
-                            <Text style={styles.inviteTitle}>Invite Visitor</Text>
-                            <Text style={styles.inviteSubtitle}>Pre-register a guest</Text>
-                        </AnimatedCard3D>
-
-                        {/* File Complaint Card */}
-                        <AnimatedCard3D
-                            index={1}
-                            style={[styles.quickActionCard, { flex: 1, marginLeft: 8 }]}
-                            onPress={() => navigation.navigate('ResidentComplaint')}
-                        >
-                            <View style={[styles.inviteIcon, { backgroundColor: '#FEE2E2' }]}>
-                                <Ionicons name="chatbox-ellipses" size={28} color={theme.colors.status.denied} />
-                            </View>
-                            <Text style={styles.inviteTitle}>File Complaint</Text>
-                            <Text style={styles.inviteSubtitle}>Report an issue</Text>
-                        </AnimatedCard3D>
-                    </View>
-
-                    {/* Quick Stats */}
-                    <View style={styles.statsRow}>
-                        <AnimatedCard3D index={2} style={[styles.statCard, { marginRight: 8 }]}>
-                            <Text style={styles.statLabel}>Visitors Today</Text>
-                            <Text style={styles.statValue}>{visitorsTodayCount}</Text>
-                        </AnimatedCard3D>
-
-                        <AnimatedCard3D index={2} style={[styles.statCard, { marginLeft: 8 }]}>
-                            <Text style={styles.statLabel}>Parcels to Collect</Text>
-                            <Text style={styles.statValue}>{parcelCount}</Text>
-                        </AnimatedCard3D>
-                    </View>
-
-                    {/* New Features Row */}
-                    <Text style={styles.sectionTitle}>Explore Features</Text>
-                    <View style={styles.featuresGrid}>
-                        <AnimatedCard3D
-                            index={3}
-                            style={styles.featureCard}
-                            onPress={() => navigation.navigate('CommunityFeedScreen')}
-                        >
-                            <Ionicons name="people" size={24} color={theme.colors.primary} />
-                            <Text style={styles.featureTitle}>Community</Text>
-                        </AnimatedCard3D>
-
-                        <AnimatedCard3D
-                            index={4}
-                            style={styles.featureCard}
-                            onPress={() => navigation.navigate('FacilityListScreen')}
-                        >
-                            <Ionicons name="calendar" size={24} color="#10b981" />
-                            <Text style={styles.featureTitle}>Facilities</Text>
-                        </AnimatedCard3D>
-
-                        <AnimatedCard3D
-                            index={5}
-                            style={styles.featureCard}
-                            onPress={() => navigation.navigate('VendorListScreen')}
-                        >
-                            <Ionicons name="construct" size={24} color="#f59e0b" />
-                            <Text style={styles.featureTitle}>Services</Text>
-                        </AnimatedCard3D>
-
-                        <AnimatedCard3D
-                            index={6}
-                            style={styles.featureCard}
-                            onPress={() => navigation.navigate('EmergencyScreen')}
-                        >
-                            <Ionicons name="warning" size={24} color="#ef4444" />
-                            <Text style={styles.featureTitle}>Emergency</Text>
-                        </AnimatedCard3D>
-                    </View>
-
-                    {/* Pending Approvals Section */}
-                    <Text style={styles.sectionTitle}>Pending Approvals</Text>
-                    {pendingVisitors.length > 0 ? (
-                        pendingVisitors.map((v, i) => (
-                            <AnimatedCard3D
-                                key={v.id}
-                                index={i + 3}
-                                glowColor={theme.colors.status.pending}
-                                style={styles.approvalCard}
-                            >
-                                <View style={styles.approvalHeader}>
-                                    <View style={styles.tag}>
-                                        <View style={styles.pulse} />
-                                        <Text style={styles.tagText}>WAITING AT GATE</Text>
+                {/* Pending Actions / Notifications */}
+                {pendingVisitors.length > 0 && (
+                    <Animated.View entering={FadeInDown.springify()} style={styles.alertSection}>
+                        {pendingVisitors.map((v, i) => (
+                            <NeoCard key={v.id} style={styles.alertCard} glass={true} padding={16}>
+                                <View style={styles.alertHeader}>
+                                    <View style={styles.pulseContainer}>
+                                        <View style={styles.pulseDot} />
+                                        <Text style={styles.alertTitle}>WAITING AT GATE</Text>
                                     </View>
-                                    <Text style={styles.time}>Now</Text>
+                                    <Text style={styles.alertTime}>Just Now</Text>
                                 </View>
-
-                                <View style={styles.visitorInfo}>
-                                    <Text style={styles.visitorName}>{v.visitorName}</Text>
-                                    <Text style={styles.purpose}>{v.purpose}</Text>
+                                <View style={styles.visitorRow}>
+                                    <View style={styles.visitorAvatar}>
+                                        <Ionicons name="person" size={24} color="#fff" />
+                                    </View>
+                                    <View>
+                                        <Text style={styles.visitorName}>{v.visitorName}</Text>
+                                        <Text style={styles.visitorPurpose}>{v.purpose}</Text>
+                                    </View>
                                 </View>
-
-                                <View style={styles.actions}>
-                                    <CinematicButton
-                                        title="Allow Entry"
+                                <View style={styles.actionRow}>
+                                    <NeonButton
+                                        title="ALLOW"
                                         variant="success"
                                         style={{ flex: 1, marginRight: 8 }}
                                         onPress={() => approveVisitor(v.id, userProfile.id)}
-                                        icon={<Ionicons name="checkmark" size={18} color="#fff" />}
                                     />
-                                    <CinematicButton
-                                        title="Deny"
+                                    <NeonButton
+                                        title="DENY"
                                         variant="danger"
                                         style={{ flex: 1, marginLeft: 8 }}
                                         onPress={() => denyVisitor(v.id, userProfile.id)}
-                                        icon={<Ionicons name="close" size={18} color="#fff" />}
                                     />
                                 </View>
-                            </AnimatedCard3D>
-                        ))
-                    ) : (
-                        <AnimatedCard3D index={3}>
-                            <View style={styles.emptyState}>
-                                <View style={styles.emptyIcon}>
-                                    <Ionicons name="checkmark-circle" size={32} color={theme.colors.success} />
-                                </View>
-                                <Text style={styles.emptyText}>No pending requests</Text>
-                                <Text style={styles.emptySub}>You're all caught up!</Text>
-                            </View>
-                        </AnimatedCard3D>
-                    )}
+                            </NeoCard>
+                        ))}
+                    </Animated.View>
+                )}
 
-                    {/* Recent Visitors Section */}
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Recent Visitors</Text>
-                        {visitors.length > 5 && (
-                            <TouchableOpacity>
-                                <Text style={styles.viewAll}>View All</Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
+                {/* Quick Actions Grid */}
+                <Text style={styles.sectionLabel}>QUICK ACCESS</Text>
+                <View style={styles.quickGrid}>
+                    <QuickAction icon="people-outline" label="Invite" delay={100} color="#3B82F6" onPress={() => navigation.navigate('InviteVisitor')} />
+                    <QuickAction icon="cube-outline" label="Parcels" delay={200} color="#F59E0B" onPress={() => navigation.navigate('ParcelEntryScreen')} />
+                    <QuickAction icon="chatbox-ellipses-outline" label="Help" delay={300} color="#EF4444" onPress={() => navigation.navigate('ResidentComplaint')} />
+                    <QuickAction icon="calendar-outline" label="Book" delay={400} color="#10B981" onPress={() => navigation.navigate('FacilityListScreen')} />
+                </View>
 
-                    {visitors.slice(0, 5).map((v, i) => (
-                        <AnimatedCard3D key={v.id} index={i + 10} delay={50} style={{ marginVertical: 6 }}>
-                            <View style={styles.row}>
-                                <View style={[
-                                    styles.statusData,
-                                    { backgroundColor: v.status === 'approved' ? '#DCFCE7' : '#FEE2E2' }
-                                ]}>
-                                    <Ionicons
-                                        name={v.status === 'approved' ? 'checkmark' : 'close'}
-                                        size={16}
-                                        color={v.status === 'approved' ? theme.colors.status.approved : theme.colors.status.denied}
-                                    />
-                                </View>
-                                <View style={{ flex: 1, marginLeft: 16 }}>
-                                    <Text style={styles.rowText}>{v.visitorName}</Text>
-                                    <Text style={styles.rowSub}>{v.purpose}</Text>
-                                </View>
-                                <Text style={styles.rowStatus}>{v.status.toUpperCase()}</Text>
+                {/* Status Cards */}
+                <View style={styles.statsRow}>
+                    <Animated.View entering={FadeInLeft(200)} style={{ flex: 1 }}>
+                        <NeoCard style={styles.statCard} glass={true}>
+                            <View style={{ position: 'absolute' }}>
+                                <StatusRing
+                                    size={80}
+                                    progress={Math.min(visitorsTodayCount / 10, 1)}
+                                    color={theme.colors.secondary}
+                                    strokeWidth={4}
+                                />
                             </View>
-                        </AnimatedCard3D>
+                            <Text style={styles.statNumber}>{visitorsTodayCount}</Text>
+                            <Text style={styles.statLabel}>Visitors Today</Text>
+                        </NeoCard>
+                    </Animated.View>
+                    <View style={{ width: 12 }} />
+                    <Animated.View entering={FadeInRight(200)} style={{ flex: 1 }}>
+                        <NeoCard style={styles.statCard} glass={true}>
+                            <Text style={[styles.statNumber, { color: parcelCount > 0 ? theme.colors.primary : '#fff' }]}>
+                                {parcelCount}
+                            </Text>
+                            <Text style={styles.statLabel}>Parcels Pending</Text>
+                        </NeoCard>
+                    </Animated.View>
+                </View>
+
+                {/* Recent Visitors */}
+                <SectionHeader title="RECENT VISITORS" action="View All" onAction={() => navigation.navigate('VisitorList')} />
+                <View style={styles.listSection}>
+                    {visitors.slice(0, 3).map((v, i) => (
+                        <Animated.View key={v.id} entering={FadeInUp.delay(i * 100)}>
+                            <NeoCard style={styles.listItem} glass={true} padding={12}>
+                                <View style={styles.listRow}>
+                                    <View style={[styles.statusDot, { backgroundColor: v.status === 'approved' ? '#10B981' : '#EF4444' }]} />
+                                    <View style={{ flex: 1, marginLeft: 12 }}>
+                                        <Text style={styles.listTitle}>{v.visitorName}</Text>
+                                        <Text style={styles.listSub}>{v.purpose}</Text>
+                                    </View>
+                                    <Text style={styles.listStatus}>{v.status.toUpperCase()}</Text>
+                                </View>
+                            </NeoCard>
+                        </Animated.View>
                     ))}
+                </View>
 
-                    {/* Parcels Section */}
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Parcels</Text>
-                        {parcels.length > 3 && (
-                            <TouchableOpacity>
-                                <Text style={styles.viewAll}>View All</Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
+                {/* Community Feed Preview */}
+                <SectionHeader title="COMMUNITY UPDATES" action="Open Feed" onAction={() => navigation.navigate('CommunityFeedScreen')} />
+                <Animated.View entering={FadeInUp.delay(400)}>
+                    <NeoCard style={styles.feedCard} glass={true} padding={0}>
+                        {/* Placeholder for feed preview */}
+                        <View style={{ padding: 16 }}>
+                            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>Annual General Meeting</Text>
+                            <Text style={{ color: theme.colors.text.secondary, marginTop: 4 }}>Join us this Sunday at the clubhouse...</Text>
+                        </View>
+                        <View style={{ height: 40, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', paddingHorizontal: 16 }}>
+                            <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: '700' }}>READ MORE</Text>
+                        </View>
+                    </NeoCard>
+                </Animated.View>
 
-                    {parcels.slice(0, 3).length > 0 ? (
-                        parcels.slice(0, 3).map((parcel, i) => (
-                            <AnimatedCard3D key={parcel.id} index={i + 20} delay={50} style={{ marginVertical: 6 }}>
-                                <View style={styles.row}>
-                                    <View style={styles.parcelIcon}>
-                                        <Ionicons name="cube" size={20} color={theme.colors.primary} />
-                                    </View>
-                                    <View style={{ flex: 1, marginLeft: 16 }}>
-                                        <Text style={styles.rowText}>{parcel.description}</Text>
-                                        <Text style={styles.rowSub}>Received at {formatTime(parcel.receivedAt)}</Text>
-                                    </View>
-                                    {parcel.status === 'pending' && (
-                                        <View style={styles.pendingBadge}>
-                                            <Text style={styles.pendingText}>NEW</Text>
-                                        </View>
-                                    )}
-                                </View>
-                            </AnimatedCard3D>
-                        ))
-                    ) : (
-                        <AnimatedCard3D index={20}>
-                            <View style={styles.emptyState}>
-                                <Text style={styles.emptyText}>No parcels</Text>
-                            </View>
-                        </AnimatedCard3D>
-                    )}
+                <View style={{ height: 100 }} />
+            </ScrollView>
 
-                    {/* Notice Board Section */}
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Notice Board</Text>
-                        {notices.length > 2 && (
-                            <TouchableOpacity>
-                                <Text style={styles.viewAll}>View All</Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
-
-                    <AnimatedCard3D index={30} style={{ marginBottom: 24 }}>
-                        {notices.slice(0, 2).length > 0 ? (
-                            notices.slice(0, 2).map((notice) => (
-                                <NoticeCard key={notice.id} notice={notice} />
-                            ))
-                        ) : (
-                            <View style={styles.emptyState}>
-                                <Text style={styles.emptyText}>No notices</Text>
-                            </View>
-                        )}
-                    </AnimatedCard3D>
-
-                </ScrollView>
-            </AnimatedScreenWrapper>
+            <SOSButton style={{ position: 'absolute', bottom: 20, right: 20 }} />
         </CinematicBackground>
     );
 };
 
+
+import { Image } from 'react-native'; // Import Image
+
 const styles = StyleSheet.create({
-    content: { padding: 24 },
-    logoutBtn: {
-        padding: 8,
-        backgroundColor: 'rgba(255,255,255,0.5)',
-        borderRadius: 12,
+    content: {
+        padding: 20,
+    },
+    profileBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        borderWidth: 2,
+        borderColor: theme.colors.primary,
+        overflow: 'hidden',
+    },
+    profileImg: {
+        width: '100%',
+        height: '100%',
     },
 
-    // Invite Card
-    inviteCard: {
-        backgroundColor: '#fff',
+    // Alerts
+    alertSection: {
         marginBottom: 24,
     },
-    inviteContent: {
+    alertCard: {
+        borderWidth: 1,
+        borderColor: theme.colors.status.pending,
+    },
+    alertHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 16,
+    },
+    pulseContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 4,
+        gap: 8,
     },
-    inviteIcon: {
-        width: 56,
-        height: 56,
-        borderRadius: 14,
-        backgroundColor: '#EEF2FF',
+    pulseDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: theme.colors.status.pending,
+    },
+    alertTitle: {
+        color: theme.colors.status.pending,
+        fontWeight: '700',
+        fontSize: 12,
+        letterSpacing: 1,
+    },
+    alertTime: {
+        color: theme.colors.text.muted,
+        fontSize: 12,
+    },
+    visitorRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    visitorAvatar: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: 'rgba(255,255,255,0.1)',
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 16,
     },
-    inviteInfo: {
-        flex: 1,
-    },
-    inviteTitle: {
-        ...theme.typography.h3,
+    visitorName: {
+        color: '#fff',
         fontSize: 18,
         fontWeight: '700',
-        color: theme.colors.text.primary,
-        marginBottom: 2,
     },
-    inviteSubtitle: {
-        ...theme.typography.body1,
-        fontSize: 13,
+    visitorPurpose: {
         color: theme.colors.text.secondary,
+        fontSize: 14,
+    },
+    actionRow: {
+        flexDirection: 'row',
     },
 
-    // Stats Row
-    statsRow: {
+    // Quick Grid
+    sectionLabel: {
+        ...theme.typography.caption,
+        color: theme.colors.text.muted,
+        marginBottom: 16,
+        marginLeft: 4,
+    },
+    quickGrid: {
         flexDirection: 'row',
+        justifyContent: 'space-between',
         marginBottom: 24,
     },
-    statCard: {
+    quickActionContainer: {
+        width: '23%',
+        aspectRatio: 1,
+    },
+    quickActionBtn: {
         flex: 1,
-        backgroundColor: '#F8FAFC',
-        padding: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    statLabel: {
-        ...theme.typography.caption,
-        color: theme.colors.text.secondary,
+    quickActionGradient: {
+        width: 56,
+        height: 56,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
         marginBottom: 8,
-        fontSize: 13,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 5,
     },
-    statValue: {
-        ...theme.typography.h1,
-        fontSize: 32,
-        fontWeight: '800',
-        color: theme.colors.text.primary,
+    quickActionLabel: {
+        color: theme.colors.text.secondary,
+        fontSize: 12,
+        fontWeight: '600',
     },
 
-    // Section Headers
+    // Stats
+    statsRow: {
+        flexDirection: 'row',
+        marginBottom: 32,
+    },
+    statCard: {
+        alignItems: 'center',
+        padding: 16,
+    },
+    statNumber: {
+        fontSize: 32,
+        fontWeight: '800',
+        color: '#fff',
+        marginBottom: 4,
+    },
+    statLabel: {
+        fontSize: 12,
+        color: theme.colors.text.muted,
+    },
+
+    // List
     sectionHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 12,
+        marginBottom: 16,
+        marginTop: 8,
     },
     sectionTitle: {
         ...theme.typography.h3,
-        fontSize: 18,
-        fontWeight: '700',
-        color: theme.colors.text.primary,
-        marginTop: 8,
-    },
-    viewAll: {
-        ...theme.typography.caption,
-        color: theme.colors.primary,
-        fontWeight: '600',
-    },
-
-    // Approval Cards
-    approvalCard: {
-        borderWidth: 1,
-        borderColor: theme.colors.status.pending,
-        backgroundColor: '#fff',
-        marginBottom: 16,
-    },
-    approvalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 20,
-    },
-    tag: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFFBEB',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 8,
-    },
-    tagText: {
-        fontSize: 10,
-        fontWeight: '700',
-        color: theme.colors.status.pending,
-        marginLeft: 6,
-    },
-    pulse: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: theme.colors.status.pending,
-    },
-    time: {
-        ...theme.typography.caption,
-        color: theme.colors.text.muted,
-    },
-    visitorInfo: {
-        alignItems: 'center',
-        marginBottom: 24,
-    },
-    visitorName: {
-        ...theme.typography.h1,
-        fontSize: 28,
-        textAlign: 'center',
-        color: theme.colors.text.primary,
-    },
-    purpose: {
-        ...theme.typography.body1,
-        color: theme.colors.text.secondary,
-        marginTop: 4,
-    },
-    actions: {
-        flexDirection: 'row',
-    },
-
-    // Empty States
-    emptyState: {
-        alignItems: 'center',
-        padding: 24,
-    },
-    emptyIcon: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: '#EEF2FF',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 16,
-    },
-    emptyText: {
-        ...theme.typography.h3,
-        fontSize: 16,
-        color: theme.colors.text.primary,
-    },
-    emptySub: {
-        ...theme.typography.body1,
-        color: theme.colors.text.muted,
-    },
-
-    // List Rows
-    row: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    statusData: {
-        width: 32,
-        height: 32,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    rowText: {
-        color: theme.colors.text.primary,
-        fontWeight: '600',
-        fontSize: 16,
-    },
-    rowSub: {
-        color: theme.colors.text.muted,
-        fontSize: 13,
-        marginTop: 2,
-    },
-    rowStatus: {
-        ...theme.typography.caption,
-        color: theme.colors.text.secondary,
-        fontWeight: '600',
-    },
-
-    // Parcel Items
-    parcelIcon: {
-        width: 32,
-        height: 32,
-        borderRadius: 12,
-        backgroundColor: '#EEF2FF',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    pendingBadge: {
-        backgroundColor: theme.colors.status.pending,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
-    },
-    pendingText: {
         color: '#fff',
+        fontSize: 16,
+    },
+    sectionAction: {
+        color: theme.colors.primary,
+        fontSize: 12,
+        fontWeight: '700',
+    },
+    listSection: {
+        marginBottom: 24,
+        gap: 12,
+    },
+    listItem: {
+        marginBottom: 0,
+    },
+    listRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    statusDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    listTitle: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    listSub: {
+        color: theme.colors.text.muted,
+        fontSize: 12,
+    },
+    listStatus: {
+        color: theme.colors.text.secondary,
         fontSize: 10,
         fontWeight: '700',
     },
-
-    // Feature Cards
-    featuresGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        marginBottom: 24,
-    },
-    featureCard: {
-        width: '48%',
-        padding: 20,
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    featureTitle: {
-        ...theme.typography.h4,
-        color: theme.colors.text.primary,
-        marginTop: 8,
-        fontSize: 14,
-    },
+    feedCard: {
+        overflow: 'hidden',
+    }
 });
 
 export default ResidentDashboard;

@@ -1,68 +1,56 @@
 import { BlurView } from 'expo-blur';
 import { StyleSheet, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-
-/**
- * AnimatedCard3D
- * Glass card with gesture-driven press feedback using Reanimated
- */
+import { GestureDetector } from 'react-native-gesture-handler';
+import Animated, { useAnimatedStyle, withDelay, withSpring, withTiming } from 'react-native-reanimated';
+import { usePhysicsGesture } from '../hooks/usePhysicsGesture';
+import { MotionTokens } from '../motion/MotionTokens';
+import theme from '../theme/theme';
 
 const AnimatedCard3D = ({
     children,
     style,
+    index = 0,
+    glowColor = theme.colors.primary,
     onPress,
 }) => {
-    const scale = useSharedValue(1);
-    const shadowOpacity = useSharedValue(0.1);
+    // Physics Hook
+    const { tapGesture, animatedStyle, values } = usePhysicsGesture({
+        onPress,
+        scaleOnPress: true,
+        tiltEffect: true,
+    });
 
-    const tapGesture = Gesture.Tap()
-        .onBegin(() => {
-            'worklet';
-            scale.value = withSpring(0.97, {
-                damping: 25,
-                stiffness: 200,
-            });
-            shadowOpacity.value = withSpring(0.15);
-        })
-        .onFinalize(() => {
-            'worklet';
-            scale.value = withSpring(1);
-            shadowOpacity.value = withSpring(0.1);
-        })
-        .onEnd(() => {
-            if (onPress) {
-                onPress();
-            }
-        });
+    const { isPressed } = values;
 
-    const animatedStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: scale.value }],
-        shadowOpacity: shadowOpacity.value,
+    // Entry Animation
+    const entryStyle = useAnimatedStyle(() => ({
+        opacity: withDelay(index * MotionTokens.timing.stagger, withTiming(1, { duration: 500 })),
+        transform: [
+            { translateY: withDelay(index * MotionTokens.timing.stagger, withSpring(0, MotionTokens.springs.enter)) }
+        ]
+    }));
+
+    // Glow Border style
+    const glowStyle = useAnimatedStyle(() => ({
+        opacity: isPressed.value ? withTiming(1) : withTiming(0.3),
+        borderColor: isPressed.value ? glowColor : 'rgba(255,255,255,0.1)',
+        borderWidth: isPressed.value ? 2 : 1,
     }));
 
     const Content = (
-        <Animated.View style={[styles.surface, animatedStyle]}>
+        <Animated.View style={[styles.surface, animatedStyle, glowStyle]}>
             <BlurView intensity={40} tint="light" style={StyleSheet.absoluteFill} />
             <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255,255,255,0.65)' }]} />
             <View style={styles.padding}>{children}</View>
         </Animated.View>
     );
 
-    if (onPress) {
-        return (
-            <GestureDetector gesture={tapGesture}>
-                <Animated.View style={[styles.container, style]}>
-                    {Content}
-                </Animated.View>
-            </GestureDetector>
-        );
-    }
-
     return (
-        <Animated.View style={[styles.container, style]}>
-            {Content}
-        </Animated.View>
+        <GestureDetector gesture={tapGesture}>
+            <Animated.View style={[styles.container, style, entryStyle]}>
+                {Content}
+            </Animated.View>
+        </GestureDetector>
     );
 };
 
@@ -75,10 +63,8 @@ const styles = StyleSheet.create({
         elevation: 4,
     },
     surface: {
-        borderRadius: 24,
+        borderRadius: theme.layout.cardRadius,
         overflow: 'hidden',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.5)',
     },
     padding: {
         padding: 20,

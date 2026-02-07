@@ -1,10 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useState } from 'react';
-import { Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import AnimatedCard3D from '../../components/AnimatedCard3D';
+import { Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import CinematicBackground from '../../components/CinematicBackground';
 import CinematicHeader from '../../components/CinematicHeader';
+import CinematicInput from '../../components/CinematicInput';
+import NeoCard from '../../components/NeoCard';
+import NeonButton from '../../components/NeonButton';
 import useAuth from '../../hooks/useAuth';
 import vendorService from '../../services/vendorService';
 import theme from '../../theme/theme';
@@ -20,12 +23,11 @@ const ServiceRequestScreen = ({ route, navigation }) => {
 
     const handleSubmit = async () => {
         if (!title.trim() || !description.trim()) {
-            Alert.alert('Error', 'Please fill in all fields');
+            Alert.alert('Missing Info', 'Please provide a title and description.');
             return;
         }
 
         setSubmitting(true);
-
         const result = await vendorService.createServiceRequest({
             societyId: userProfile.societyId,
             flatId: userProfile.flatId,
@@ -38,137 +40,121 @@ const ServiceRequestScreen = ({ route, navigation }) => {
             scheduledTime: '10:00',
             estimatedCost: vendor.pricing?.baseCharge || 0
         });
-
         setSubmitting(false);
 
         if (result.success) {
-            Alert.alert(
-                'Request Submitted!',
-                'The vendor will respond to your request soon.',
-                [{ text: 'OK', onPress: () => navigation.goBack() }]
-            );
+            Alert.alert('Request Sent', 'The vendor has been notified.', [
+                { text: 'OK', onPress: () => navigation.goBack() }
+            ]);
         } else {
             Alert.alert('Error', result.error || 'Failed to submit request');
         }
     };
 
     return (
-        <View style={styles.container}>
-            <CinematicBackground />
+        <CinematicBackground>
             <CinematicHeader
-                title="Service Request"
-                subtitle={vendor.name}
-                leftIcon="arrow-back"
-                onLeftPress={() => navigation.goBack()}
+                title="BOOK SERVICE"
+                subTitle={vendor.name.toUpperCase()}
+                onBack={() => navigation.goBack()}
             />
 
-            <ScrollView style={styles.content}>
-                <AnimatedCard3D style={styles.card}>
-                    <Text style={styles.label}>Issue Title</Text>
-                    <TextInput
-                        style={styles.input}
-                        placeholder="e.g., Leaking kitchen tap"
-                        placeholderTextColor={theme.colors.text.muted}
-                        value={title}
-                        onChangeText={setTitle}
-                    />
+            <ScrollView contentContainerStyle={styles.content}>
+                <Animated.View entering={FadeInDown.duration(500)}>
+                    <NeoCard glass={true} padding={20}>
+                        <View style={styles.formGap}>
+                            <CinematicInput
+                                label="ISSUE TITLE"
+                                value={title}
+                                onChangeText={setTitle}
+                                icon={<Ionicons name="pricetag" size={20} color={theme.colors.primary} />}
+                            />
 
-                    <Text style={styles.label}>Description</Text>
-                    <TextInput
-                        style={[styles.input, styles.textArea]}
-                        placeholder="Describe the issue in detail..."
-                        placeholderTextColor={theme.colors.text.muted}
-                        value={description}
-                        onChangeText={setDescription}
-                        multiline
-                        numberOfLines={6}
-                        textAlignVertical="top"
-                    />
+                            <CinematicInput
+                                label="DESCRIPTION"
+                                value={description}
+                                onChangeText={setDescription}
+                                multiline
+                                numberOfLines={4}
+                                icon={<Ionicons name="document-text" size={20} color={theme.colors.secondary} />}
+                            />
 
-                    <Text style={styles.label}>Preferred Date</Text>
-                    <TouchableOpacity style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
-                        <Ionicons name="calendar" size={20} color={theme.colors.primary} />
-                        <Text style={styles.dateText}>{scheduledDate.toDateString()}</Text>
-                    </TouchableOpacity>
+                            <View style={styles.dateSection}>
+                                <Text style={styles.sectionLabel}>PREFERRED DATE</Text>
+                                <TouchableOpacity style={styles.dateBtn} onPress={() => setShowDatePicker(true)}>
+                                    <Ionicons name="calendar-outline" size={20} color="#fff" />
+                                    <Text style={styles.dateText}>{scheduledDate.toDateString()}</Text>
+                                    <Ionicons name="chevron-down" size={16} color={theme.colors.text.muted} />
+                                </TouchableOpacity>
+                            </View>
 
-                    {showDatePicker && (
-                        <DateTimePicker
-                            value={scheduledDate}
-                            mode="date"
-                            minimumDate={new Date()}
-                            onChange={(event, selectedDate) => {
-                                setShowDatePicker(Platform.OS === 'ios');
-                                if (selectedDate) setScheduledDate(selectedDate);
-                            }}
-                        />
-                    )}
+                            {showDatePicker && (
+                                <DateTimePicker
+                                    value={scheduledDate}
+                                    mode="date"
+                                    minimumDate={new Date()}
+                                    onChange={(event, selectedDate) => {
+                                        setShowDatePicker(Platform.OS === 'ios');
+                                        if (selectedDate) setScheduledDate(selectedDate);
+                                    }}
+                                    themeVariant="dark"
+                                />
+                            )}
 
-                    <View style={styles.pricing}>
-                        <Text style={styles.pricingLabel}>Estimated Cost</Text>
-                        <Text style={styles.pricingAmount}>₹{vendor.pricing?.baseCharge || 0}+</Text>
-                    </View>
+                            <View style={styles.costContainer}>
+                                <Text style={styles.costLabel}>ESTIMATED COST</Text>
+                                <Text style={styles.costValue}>₹{vendor.pricing?.baseCharge || 0}+</Text>
+                            </View>
 
-                    <TouchableOpacity
-                        style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-                        onPress={handleSubmit}
-                        disabled={submitting}
-                    >
-                        <Text style={styles.submitButtonText}>
-                            {submitting ? 'Submitting...' : 'Submit Request'}
-                        </Text>
-                    </TouchableOpacity>
-                </AnimatedCard3D>
+                            <NeonButton
+                                title="CONFIRM BOOKING"
+                                onPress={handleSubmit}
+                                loading={submitting}
+                                icon={<Ionicons name="checkmark-circle" size={20} color="#fff" style={{ marginRight: 8 }} />}
+                                style={{ marginTop: 12 }}
+                            />
+                        </View>
+                    </NeoCard>
+                </Animated.View>
             </ScrollView>
-        </View>
+        </CinematicBackground>
     );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: theme.colors.background,
-    },
     content: {
-        flex: 1,
-        padding: 16,
+        padding: 24,
     },
-    card: {
-        padding: 20,
+    formGap: {
+        gap: 20,
     },
-    label: {
-        color: theme.colors.text.primary,
-        fontSize: 16,
-        fontWeight: 'bold',
-        marginBottom: 12,
-        marginTop: 12,
+    dateSection: {
+        marginTop: 8,
     },
-    input: {
-        backgroundColor: 'rgba(255,255,255,0.1)',
-        borderRadius: 12,
-        padding: 16,
-        color: theme.colors.text.primary,
-        fontSize: 16,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
+    sectionLabel: {
+        ...theme.typography.caption,
+        color: theme.colors.text.muted,
+        marginBottom: 8,
+        marginLeft: 4,
     },
-    textArea: {
-        minHeight: 120,
-    },
-    dateButton: {
+    dateBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(255,255,255,0.1)',
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
         padding: 16,
         borderRadius: 12,
-        marginBottom: 12,
+        justifyContent: 'space-between',
     },
     dateText: {
-        color: theme.colors.text.primary,
-        fontSize: 16,
+        flex: 1,
+        color: '#fff',
         marginLeft: 12,
+        fontSize: 16,
+        fontWeight: '500',
     },
-    pricing: {
+    costContainer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -176,30 +162,18 @@ const styles = StyleSheet.create({
         borderTopWidth: 1,
         borderBottomWidth: 1,
         borderColor: 'rgba(255,255,255,0.1)',
-        marginVertical: 16,
+        marginTop: 8,
     },
-    pricingLabel: {
+    costLabel: {
         color: theme.colors.text.secondary,
-        fontSize: 16,
+        fontSize: 14,
+        fontWeight: '600',
+        letterSpacing: 1,
     },
-    pricingAmount: {
-        ...theme.typography.h2,
+    costValue: {
+        fontSize: 24,
+        fontWeight: '800',
         color: theme.colors.primary,
-    },
-    submitButton: {
-        backgroundColor: theme.colors.primary,
-        padding: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-        marginTop: 12,
-    },
-    submitButtonDisabled: {
-        opacity: 0.5,
-    },
-    submitButtonText: {
-        color: '#fff',
-        fontSize: 16,
-        fontWeight: 'bold',
     },
 });
 

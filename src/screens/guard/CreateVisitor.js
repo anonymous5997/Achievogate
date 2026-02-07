@@ -9,28 +9,30 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
     View,
 } from 'react-native';
-import AnimatedCard3D from '../../components/AnimatedCard3D'; // Updated
-import AnimatedScreenWrapper from '../../components/AnimatedScreenWrapper'; // Updated
+import Animated, { FadeInDown, ZoomIn } from 'react-native-reanimated';
 import CinematicBackground from '../../components/CinematicBackground';
-import CinematicButton from '../../components/CinematicButton';
 import CinematicHeader from '../../components/CinematicHeader';
+import CinematicInput from '../../components/CinematicInput';
+import NeoCard from '../../components/NeoCard';
+import NeonButton from '../../components/NeonButton';
 import useAuth from '../../hooks/useAuth';
 import useVisitors from '../../hooks/useVisitors';
 import theme from '../../theme/theme';
 
-const CreateVisitor = ({ navigation }) => {
+const CreateVisitor = ({ navigation, route }) => {
     const { userProfile } = useAuth();
     const { createVisitor } = useVisitors();
+    const prefill = route.params?.prefill || {};
 
     const [formData, setFormData] = useState({
-        visitorName: '',
+        visitorName: prefill.name || '',
         phone: '',
-        flatNumber: '',
-        purpose: '',
+        flatNumber: prefill.flat || '',
+        purpose: prefill.type || '',
+        vehicleNumber: '',
         photoUrl: null,
     });
     const [loading, setLoading] = useState(false);
@@ -47,113 +49,172 @@ const CreateVisitor = ({ navigation }) => {
     };
 
     const handleSubmit = async () => {
-        if (!formData.visitorName || !formData.flatNumber) return Alert.alert('Missing Info');
+        if (!formData.visitorName || !formData.flatNumber) return Alert.alert('Missing Info', 'Name and Flat Number are required.');
         setLoading(true);
-        const result = await createVisitor(formData, userProfile.id);
+
+        const payload = {
+            ...formData,
+            societyId: userProfile.societyId,
+            visitorPhone: formData.phone,
+        };
+
+        const guardInfo = {
+            uid: userProfile.id,
+            name: userProfile.name
+        };
+
+        const result = await createVisitor(payload, guardInfo);
         setLoading(false);
         if (result.success) {
-            Alert.alert('Success', 'Visitor registered');
-            navigation.goBack();
+            Alert.alert('Access Granted', 'Visitor has been registered successfully.', [
+                { text: 'OK', onPress: () => navigation.goBack() }
+            ]);
         } else {
-            Alert.alert('Error', result.error);
+            Alert.alert('Registration Failed', result.error);
         }
     };
 
     return (
         <CinematicBackground>
-            <AnimatedScreenWrapper noPadding>
-                <CinematicHeader title="Register Entry" onBack={() => navigation.goBack()} />
+            <CinematicHeader title="NEW ENTRY" subTitle="VISITOR REGISTRATION" onBack={() => navigation.goBack()} />
 
-                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-                    <ScrollView contentContainerStyle={styles.content}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+                <ScrollView contentContainerStyle={styles.content}>
 
-                        <View style={styles.photoContainer}>
-                            <TouchableOpacity onPress={handleTakePhoto} style={styles.photoBox}>
-                                {formData.photoUrl ? (
-                                    <Image source={{ uri: formData.photoUrl }} style={styles.photo} />
-                                ) : (
-                                    <View style={styles.placeholder}>
-                                        <Ionicons name="camera" size={32} color={theme.colors.primary} />
-                                    </View>
-                                )}
-                            </TouchableOpacity>
-                            <Text style={styles.photoLabel}>Capture Visitor Photo</Text>
-                        </View>
+                    {/* AI Photo Capture */}
+                    <Animated.View entering={ZoomIn.duration(600)} style={styles.photoSection}>
+                        <TouchableOpacity onPress={handleTakePhoto} style={styles.viewfinder}>
+                            {/* Tactical Corners */}
+                            <View style={[styles.corner, styles.tl]} />
+                            <View style={[styles.corner, styles.tr]} />
+                            <View style={[styles.corner, styles.bl]} />
+                            <View style={[styles.corner, styles.br]} />
 
-                        <AnimatedCard3D delay={200}>
-                            {[
-                                { key: 'visitorName', placeholder: 'Visitor Name', icon: 'person' },
-                                { key: 'phone', placeholder: 'Phone Number', icon: 'call', keyboard: 'phone-pad' },
-                                { key: 'flatNumber', placeholder: 'Flat No (e.g. A-101)', icon: 'home' },
-                                { key: 'purpose', placeholder: 'Purpose', icon: 'briefcase' },
-                            ].map((field, i) => (
-                                <View key={field.key} style={styles.inputRow}>
-                                    <View style={styles.iconCircle}>
-                                        <Ionicons name={field.icon} size={18} color={theme.colors.primary} />
-                                    </View>
-                                    <TextInput
-                                        style={styles.input}
-                                        placeholder={field.placeholder}
-                                        placeholderTextColor={theme.colors.text.muted}
-                                        value={formData[field.key]}
-                                        onChangeText={t => handleInputChange(field.key, t)}
-                                        keyboardType={field.keyboard || 'default'}
-                                    />
+                            {formData.photoUrl ? (
+                                <Image source={{ uri: formData.photoUrl }} style={styles.photo} />
+                            ) : (
+                                <View style={styles.placeholder}>
+                                    <Ionicons name="camera" size={40} color={theme.colors.primary} />
+                                    <Text style={styles.photoText}>TAP TO SCAN FACE</Text>
                                 </View>
-                            ))}
+                            )}
+                        </TouchableOpacity>
+                    </Animated.View>
 
-                            <CinematicButton
-                                title="Authorize Entry"
-                                onPress={handleSubmit}
-                                loading={loading}
-                                style={{ marginTop: 24 }}
-                                icon={<Ionicons name="shield-checkmark" size={20} color="#fff" />}
-                            />
-                        </AnimatedCard3D>
+                    {/* Form Fields */}
+                    <Animated.View entering={FadeInDown.delay(300).springify()}>
+                        <NeoCard glass={true} padding={20}>
+                            <View style={styles.formGrid}>
+                                <CinematicInput
+                                    label="VISITOR NAME"
+                                    value={formData.visitorName}
+                                    onChangeText={t => handleInputChange('visitorName', t)}
+                                    icon={<Ionicons name="person" size={20} color={theme.colors.primary} />}
+                                />
 
-                    </ScrollView>
-                </KeyboardAvoidingView>
-            </AnimatedScreenWrapper>
+                                <CinematicInput
+                                    label="PHONE NUMBER"
+                                    value={formData.phone}
+                                    onChangeText={t => handleInputChange('phone', t)}
+                                    keyboardType="phone-pad"
+                                    icon={<Ionicons name="call" size={20} color={theme.colors.secondary} />}
+                                />
+
+                                <View style={styles.row}>
+                                    <View style={[styles.col, { marginRight: 8 }]}>
+                                        <CinematicInput
+                                            label="FLAT NO"
+                                            value={formData.flatNumber}
+                                            onChangeText={t => handleInputChange('flatNumber', t)}
+                                            icon={<Ionicons name="home" size={20} color={theme.colors.accent} />}
+                                        />
+                                    </View>
+                                    <View style={[styles.col, { marginLeft: 8 }]}>
+                                        <CinematicInput
+                                            label="VEHICLE (OPT)"
+                                            value={formData.vehicleNumber}
+                                            onChangeText={t => handleInputChange('vehicleNumber', t)}
+                                            icon={<Ionicons name="car" size={20} color={theme.colors.text.muted} />}
+                                        />
+                                    </View>
+                                </View>
+
+                                <CinematicInput
+                                    label="PURPOSE"
+                                    value={formData.purpose}
+                                    onChangeText={t => handleInputChange('purpose', t)}
+                                    icon={<Ionicons name="briefcase" size={20} color={theme.colors.text.muted} />}
+                                />
+
+                                <NeonButton
+                                    title="AUTHORIZE ENTRY"
+                                    onPress={handleSubmit}
+                                    loading={loading}
+                                    icon={<Ionicons name="checkmark-circle" size={20} color="#fff" style={{ marginRight: 8 }} />}
+                                    style={{ marginTop: 12 }}
+                                />
+                            </View>
+                        </NeoCard>
+                    </Animated.View>
+
+                </ScrollView>
+            </KeyboardAvoidingView>
         </CinematicBackground>
     );
 };
 
 const styles = StyleSheet.create({
-    content: { padding: 24 },
-    photoContainer: { alignItems: 'center', marginBottom: 32 },
-    photoBox: {
-        width: 100, height: 100, borderRadius: 30, // Squircle
-        backgroundColor: '#fff',
-        alignItems: 'center', justifyContent: 'center',
-        shadowColor: theme.colors.primary,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.15,
-        shadowRadius: 16,
-        elevation: 8,
+    content: { padding: 20, paddingBottom: 100 },
+    photoSection: { alignItems: 'center', marginBottom: 32 },
+    viewfinder: {
+        width: 160,
+        height: 160,
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'relative',
     },
-    photo: { width: '100%', height: '100%', borderRadius: 30 },
+    photo: {
+        width: 140,
+        height: 140,
+        borderRadius: 20,
+    },
     placeholder: {
-        width: '100%', height: '100%', borderRadius: 30,
-        alignItems: 'center', justifyContent: 'center',
-        backgroundColor: '#EEF2FF',
-        borderWidth: 2, borderColor: '#fff',
+        width: 140,
+        height: 140,
+        borderRadius: 20,
+        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+        borderWidth: 1,
+        borderColor: theme.colors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    photoLabel: { ...theme.typography.caption, marginTop: 12, color: theme.colors.text.secondary },
-    inputRow: {
-        flexDirection: 'row', alignItems: 'center',
-        backgroundColor: '#F8FAFC',
-        borderRadius: theme.layout.buttonRadius,
-        paddingHorizontal: 16,
-        height: 56,
-        marginBottom: 16,
-        borderWidth: 1, borderColor: '#E2E8F0'
+    photoText: {
+        ...theme.typography.caption,
+        color: theme.colors.primary,
+        fontSize: 10,
+        marginTop: 8,
+        letterSpacing: 1,
     },
-    iconCircle: { marginRight: 12 },
-    input: {
-        flex: 1, color: theme.colors.text.primary, fontSize: 16,
-        fontFamily: Platform.OS === 'ios' ? 'System' : 'Roboto',
-        fontWeight: '500'
-    }
+    corner: {
+        position: 'absolute',
+        width: 20,
+        height: 20,
+        borderColor: theme.colors.secondary,
+    },
+    tl: { top: 0, left: 0, borderTopWidth: 2, borderLeftWidth: 2 },
+    tr: { top: 0, right: 0, borderTopWidth: 2, borderRightWidth: 2 },
+    bl: { bottom: 0, left: 0, borderBottomWidth: 2, borderLeftWidth: 2 },
+    br: { bottom: 0, right: 0, borderBottomWidth: 2, borderRightWidth: 2 },
+
+    formGrid: {
+        gap: 16,
+    },
+    row: {
+        flexDirection: 'row',
+    },
+    col: {
+        flex: 1,
+    },
 });
 
 export default CreateVisitor;
